@@ -60,7 +60,7 @@ jobs:
           $release = Join-Path $pwd "release"
           New-Item -ItemType Directory -Force -Path $release | Out-Null
           $msi = Get-ChildItem "composeApp/build/compose/binaries/main/msi/*.msi" | Select-Object -First 1
-          $portableSource = "composeApp/build/compose/binaries/main/Inkora"
+          $portableSource = "composeApp/build/compose/binaries/main/app/Inkora"
           $portable = Join-Path $release "Inkora-$version-windows-portable.zip"
           if (-not $msi -or -not (Test-Path $portableSource)) { throw "Windows outputs are missing." }
           Copy-Item $msi.FullName (Join-Path $release "Inkora-$version.msi")
