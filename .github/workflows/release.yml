@@ -45,7 +45,10 @@ jobs:
           INKORA_KEY_ALIAS: ${{ secrets.INKORA_KEY_ALIAS }}
           INKORA_KEY_PASSWORD: ${{ secrets.INKORA_KEY_PASSWORD }}
         run: |
-          .\gradlew.bat :composeApp:packageMsi :composeApp:createDistributable :composeApp:assembleRelease --no-daemon
+          # Compose's packaging tasks and the PDFBox resource task use Gradle
+          # project objects at execution time, so disable configuration-cache
+          # for this release build even though local builds may cache safely.
+          .\gradlew.bat :composeApp:packageMsi :composeApp:createDistributable :composeApp:assembleRelease --no-daemon --no-configuration-cache
 
       - name: Stage release assets and manifest
         shell: pwsh
