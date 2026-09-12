@@ -1,0 +1,26 @@
+# Gradle and IDE output
+.gradle/
+.gradle-home/
+.kotlin/
+build/
+build-tmp/
+adb-home/
+composeApp/build/
+local.properties
+
+# Local test/build logs and temporary signing material
+*.log
+*.log.exit
+*.jks
+*.keystore
+.inkora-secrets/
+.tmp/
+
+# Scratch files created by local build probes
+$null
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+*.iml

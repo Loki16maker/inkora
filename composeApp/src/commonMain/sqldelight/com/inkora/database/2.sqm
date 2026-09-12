@@ -1,0 +1,2 @@
+-- Migration 2 -> 3: add sync state for future sync support. V1 remains local-only.
+ALTER TABLE documents ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'LOCAL_ONLY';
