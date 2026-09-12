@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
     alias(libs.plugins.android.application)
@@ -90,6 +92,13 @@ kotlin {
     }
 }
 
+// CI uses JDK 21 while Android's Java compiler intentionally targets 17.
+// Pin every JVM Kotlin compilation to the same bytecode level so release
+// packaging passes Gradle's target compatibility validation.
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+}
+
 tasks.matching { it.name == "desktopProcessResources" || it.name == "jvmProcessResources" }.configureEach {
     dependsOn(generateDesktopCloudConfig)
 }
@@ -103,7 +112,7 @@ compose.desktop {
             targetFormats(TargetFormat.Msi)
             modules("java.sql")
             packageName = "Inkora"
-            packageVersion = "1.1.1"
+            packageVersion = rootProject.version.toString()
             description = "Inkora handwritten notebook and PDF study workspace"
             vendor = "Inkora"
             windows {
@@ -205,7 +214,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 3
+        versionCode = 4
         versionName = rootProject.version.toString()
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")
