@@ -10,6 +10,8 @@ Windows portable installs download the ZIP and use a detached PowerShell helper 
 
 Every payload is checked against the SHA-256 value in `latest.json` before installation. Android still shows the system confirmation screen and may require enabling **Allow from this source** for Inkora once.
 
+If an Android copy was installed by Google Play, Inkora opens its Play listing instead of sideloading the GitHub APK. Copies installed from GitHub use the APK installer flow.
+
 ## Publishing a release
 
 1. Bump `version` in the root `build.gradle.kts`, `InkoraConfig.versionName`, and `InkoraConfig.versionCode`.

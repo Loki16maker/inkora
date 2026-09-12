@@ -49,6 +49,25 @@ class AndroidUpdateService : UpdateService {
         runCatching {
             require(update.versionCode > InkoraConfig.versionCode) { "Inkora is already up to date." }
             val artifact = update.androidApk ?: error("No Android APK was published for this release.")
+
+            // Play-installed copies should stay on Play so Play Protect and
+            // the store's signing key remain in control. Sideloaded copies
+            // continue through the GitHub APK flow below.
+            val installedByPlay = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName == "com.android.vending"
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getInstallerPackageName(context.packageName) == "com.android.vending"
+                }
+            }.getOrDefault(false)
+            if (installedByPlay && update.playStoreUrl.isNotBlank()) {
+                val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse(update.playStoreUrl)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                AndroidPlatformContext.activity().startActivity(storeIntent)
+                return@withContext UpdateInstallResult(UpdateInstallStatus.STARTED, "Google Play opened to update Inkora.")
+            }
             val payload = downloadBytes(artifact.url)
             verifySha256(payload, artifact.sha256)
             val updateDirectory = File(context.cacheDir, "inkora/updates").also(File::mkdirs)

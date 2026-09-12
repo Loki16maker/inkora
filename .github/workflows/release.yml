@@ -80,6 +80,7 @@ jobs:
             versionCode = $versionCode
             notes = "See the release notes for changes in Inkora $version."
             releaseUrl = "https://github.com/$($env:REPOSITORY)/releases/tag/$($env:TAG)"
+            playStoreUrl = "https://play.google.com/store/apps/details?id=com.inkora"
             windowsPortable = [ordered]@{ url = "$base/Inkora-$version-windows-portable.zip"; sha256 = (Sha256 $portable) ; sizeBytes = (Get-Item $portable).Length }
             windowsMsi = [ordered]@{ url = "$base/Inkora-$version.msi"; sha256 = (Sha256 $msiPath) ; sizeBytes = (Get-Item $msiPath).Length }
             androidApk = [ordered]@{ url = "$base/Inkora-$version-android.apk"; sha256 = (Sha256 $apkPath) ; sizeBytes = (Get-Item $apkPath).Length }

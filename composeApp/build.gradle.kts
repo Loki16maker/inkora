@@ -81,7 +81,7 @@ compose.desktop {
             targetFormats(TargetFormat.Msi)
             modules("java.sql")
             packageName = "Inkora"
-            packageVersion = "1.1.0"
+            packageVersion = "1.1.1"
             description = "Inkora handwritten notebook and PDF study workspace"
             vendor = "Inkora"
             windows {
@@ -178,7 +178,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 2
+        versionCode = 3
         versionName = rootProject.version.toString()
     }
 

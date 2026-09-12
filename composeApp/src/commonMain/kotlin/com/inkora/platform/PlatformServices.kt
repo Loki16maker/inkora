@@ -57,6 +57,7 @@ data class UpdateManifest(
     val versionCode: Int,
     val notes: String = "",
     val releaseUrl: String = "",
+    val playStoreUrl: String = "",
     val windowsPortable: UpdateArtifact? = null,
     val windowsMsi: UpdateArtifact? = null,
     val androidApk: UpdateArtifact? = null,
