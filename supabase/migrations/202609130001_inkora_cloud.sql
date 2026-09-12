@@ -56,6 +56,21 @@ create index if not exists document_revisions_document_version_idx
 create index if not exists share_links_document_idx
     on public.share_links(document_id, created_at desc);
 
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+    new.updated_at = timezone('utc', now());
+    return new;
+end;
+$$;
+
+drop trigger if exists documents_set_updated_at on public.documents;
+create trigger documents_set_updated_at
+    before update on public.documents
+    for each row execute function public.set_updated_at();
+
 create or replace function public.is_document_member(target_document_id uuid)
 returns boolean
 language sql
@@ -94,6 +109,12 @@ alter table public.documents enable row level security;
 alter table public.document_members enable row level security;
 alter table public.document_revisions enable row level security;
 alter table public.share_links enable row level security;
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.documents to authenticated;
+grant select, insert, update, delete on public.document_members to authenticated;
+grant select, insert on public.document_revisions to authenticated;
+grant select, insert, update, delete on public.share_links to authenticated;
 
 drop policy if exists documents_select on public.documents;
 create policy documents_select on public.documents

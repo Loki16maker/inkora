@@ -1,6 +1,9 @@
 package com.inkora.app
 
 import com.inkora.data.store.DocumentEditorStore
+import com.inkora.cloud.CloudAccount
+import com.inkora.cloud.CloudAuthResult
+import com.inkora.cloud.CloudSyncSummary
 import com.inkora.data.store.SaveState
 import com.inkora.domain.model.*
 import com.inkora.domain.repository.DocumentRepository
@@ -32,6 +35,7 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
     val files = platformFileSystem()
     val pdf = pdfEngine()
     val updates = updateService()
+    val cloud = CloudAccount(files)
     private val codec = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val sessionFile get() = files.child(files.appDataDirectory, "workspace.json")
     private val sessionMutex = Mutex()
@@ -46,6 +50,7 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
     val updateBusy = MutableStateFlow(false)
 
     init {
+        scope.launch { runCatching { cloud.restore() } }
         run {
             try {
                 files.createDirectory(files.appDataDirectory)
@@ -224,6 +229,14 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
             updateBusy.value = false
         }
     }
+
+    suspend fun cloudSignIn(email: String, password: String): CloudAuthResult = cloud.signIn(email, password)
+
+    suspend fun cloudSignUp(email: String, password: String): CloudAuthResult = cloud.signUp(email, password)
+
+    suspend fun cloudSignOut() = cloud.signOut()
+
+    suspend fun cloudSync(): CloudSyncSummary = cloud.sync(repository)
 
     suspend fun favorite(summary: DocumentSummary) {
         repository.setFavorite(summary.id, !summary.isFavorite)

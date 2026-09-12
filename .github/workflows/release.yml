@@ -44,6 +44,8 @@ jobs:
           INKORA_KEYSTORE_PASSWORD: ${{ secrets.INKORA_KEYSTORE_PASSWORD }}
           INKORA_KEY_ALIAS: ${{ secrets.INKORA_KEY_ALIAS }}
           INKORA_KEY_PASSWORD: ${{ secrets.INKORA_KEY_PASSWORD }}
+          INKORA_SUPABASE_URL: ${{ secrets.INKORA_SUPABASE_URL }}
+          INKORA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.INKORA_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           # Compose's packaging tasks and the PDFBox resource task use Gradle
           # project objects at execution time, so disable configuration-cache

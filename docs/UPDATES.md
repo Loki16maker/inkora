@@ -12,6 +12,13 @@ Every payload is checked against the SHA-256 value in `latest.json` before insta
 
 If an Android copy was installed by Google Play, Inkora opens its Play listing instead of sideloading the GitHub APK. Copies installed from GitHub use the APK installer flow.
 
+## Cloud sync
+
+Windows and Android release builds include optional Supabase account sync. Open
+**Create → Account**, sign in or create an account, then choose **Sync now**.
+The cloud setup and its security policies are documented in
+[`docs/CLOUD_SYNC.md`](CLOUD_SYNC.md).
+
 ## Publishing a release
 
 1. Bump `version` in the root `build.gradle.kts`, `InkoraConfig.versionName`, and `InkoraConfig.versionCode`.

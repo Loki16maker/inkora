@@ -3,8 +3,8 @@ package com.inkora.app
 /** Central product and storage versions used by every platform target. */
 public object InkoraConfig {
     public const val productName: String = "Inkora"
-    public const val versionName: String = "1.1.1"
-    public const val versionCode: Int = 3
+    public const val versionName: String = "1.2.0"
+    public const val versionCode: Int = 4
     public const val databaseVersion: Int = 3
     public const val backupFormatVersion: Int = 1
     public const val backupExtension: String = "inkorabackup"

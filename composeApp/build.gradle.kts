@@ -9,6 +9,23 @@ plugins {
     alias(libs.plugins.sqldelight)
 }
 
+val supabaseUrl = providers.environmentVariable("INKORA_SUPABASE_URL").orNull.orEmpty()
+val supabasePublishableKey = providers.environmentVariable("INKORA_SUPABASE_PUBLISHABLE_KEY").orNull.orEmpty()
+fun String.asJavaStringLiteral(): String = replace("\\", "\\\\").replace("\"", "\\\"")
+
+val generateDesktopCloudConfig = tasks.register("generateDesktopCloudConfig") {
+    val output = layout.buildDirectory.file("generated/inkora-cloud/inkora-supabase.properties")
+    outputs.file(output)
+    doLast {
+        val file = output.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            "url=${supabaseUrl.replace("\\", "\\\\").replace("\n", "")}\n" +
+                "publishableKey=${supabasePublishableKey.replace("\\", "\\\\").replace("\n", "")}\n",
+        )
+    }
+}
+
 kotlin {
     androidTarget()
     jvm("desktop")
@@ -50,6 +67,7 @@ kotlin {
         val desktopMain = getByName("desktopMain")
         val desktopTest = getByName("desktopTest")
         desktopMain.dependsOn(commonMain)
+        desktopMain.resources.srcDir(layout.buildDirectory.dir("generated/inkora-cloud"))
         desktopTest.dependsOn(commonTest)
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
@@ -70,6 +88,10 @@ kotlin {
             implementation(files(layout.buildDirectory.dir("classes/kotlin/desktop/main")))
         }
     }
+}
+
+tasks.matching { it.name == "desktopProcessResources" || it.name == "jvmProcessResources" }.configureEach {
+    dependsOn(generateDesktopCloudConfig)
 }
 
 compose.desktop {
@@ -155,6 +177,11 @@ tasks.withType<Test>().configureEach {
 android {
     namespace = "com.inkora"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
+    buildFeatures { buildConfig = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     // Release APKs must keep the same signing key so Android can install an
     // update over the existing app. CI supplies these values through secrets;
@@ -180,6 +207,8 @@ android {
         targetSdk = compileSdk
         versionCode = 3
         versionName = rootProject.version.toString()
+        buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")
     }
 
     buildTypes {

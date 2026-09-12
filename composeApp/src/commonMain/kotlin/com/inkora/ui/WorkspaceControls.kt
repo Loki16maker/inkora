@@ -19,7 +19,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 
-enum class InkoraSymbol { PEN, HIGHLIGHT, ERASE, SELECT, HAND, SHAPE, TEXT, NOTE, IMAGE, UNDO, REDO, PLUS, MINUS, FIT, GRID, BOOK, PDF, BOARD, SEARCH, BACK, SPLIT, MORE, CHECK, STAR, MOON, SUN, FOLDER, TRASH, DOWNLOAD }
+enum class InkoraSymbol { PEN, HIGHLIGHT, ERASE, SELECT, HAND, SHAPE, TEXT, NOTE, IMAGE, UNDO, REDO, PLUS, MINUS, FIT, GRID, BOOK, PDF, BOARD, SEARCH, BACK, SPLIT, MORE, CHECK, STAR, MOON, SUN, FOLDER, TRASH, DOWNLOAD, ACCOUNT }
 
 /** Small vector icon family; no font glyphs, emoji, or platform-dependent symbol fallbacks. */
 @Composable
@@ -61,6 +61,7 @@ fun InkoraIcon(symbol: InkoraSymbol, modifier: Modifier = Modifier, tint: Color 
                 InkoraSymbol.FOLDER -> line(3f,6f,9f,6f,11f,9f,21f,9f,21f,20f,3f,20f,3f,6f)
                 InkoraSymbol.TRASH -> { line(3f,6f,21f,6f);line(6f,6f,7f,21f,17f,21f,18f,6f);line(9f,6f,9f,3f,15f,3f,15f,6f);line(10f,10f,10f,17f);line(14f,10f,14f,17f) }
                 InkoraSymbol.DOWNLOAD -> { line(12f,3f,12f,16f,7f,11f);line(12f,16f,17f,11f);line(4f,16f,4f,21f,20f,21f,20f,16f) }
+                InkoraSymbol.ACCOUNT -> { drawCircle(tint, 4f, Offset(12f, 8f), style = Stroke(1.7f)); drawArc(tint, 0f, 180f, false, Offset(4f, 12f), Size(16f, 10f), style = Stroke(1.7f)) }
             }
         }
     }

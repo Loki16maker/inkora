@@ -79,6 +79,7 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
     var folderDialog by remember { mutableStateOf(false) }
     var move by remember { mutableStateOf<DocumentSummary?>(null) }
     var delete by remember { mutableStateOf<DocumentSummary?>(null) }
+    var accountDialog by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     val filtered = documents.filter {
         it.isTrashed == (section == "Trash") && (section != "Favorites" || it.isFavorite) &&
@@ -100,6 +101,7 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
             }
             "Restore backup" -> runtime.run { runtime.importBackup() }
             "Check for updates" -> runtime.run { runtime.checkForUpdates() }
+            "Account" -> accountDialog = true
             "Folder" -> { name = ""; folderDialog = true }
             else -> runtime.run {
                 val now = platformEpochMillis()
@@ -155,11 +157,12 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
                     if (wide) {
                         WorkspaceAction("Import file", InkoraSymbol.DOWNLOAD, { runtime.run { runtime.importDocument() } })
                         WorkspaceAction("Check for updates", InkoraSymbol.CHECK, { runtime.run { runtime.checkForUpdates() } })
+                        WorkspaceAction("Account", InkoraSymbol.ACCOUNT, { accountDialog = true })
                     }
                     Box {
                         Button(onClick = { createMenu = true }, shape = RoundedCornerShape(12.dp)) { InkoraIcon(InkoraSymbol.PLUS); Spacer(Modifier.width(8.dp)); Text("Create") }
                         DropdownMenu(createMenu, { createMenu = false }) {
-                            listOf("Notebook", "PDF or Office file", "Whiteboard", "Text document", "Quick note", "Folder", "Export backup", "Restore backup", "Check for updates").forEach { kind ->
+                            listOf("Notebook", "PDF or Office file", "Whiteboard", "Text document", "Quick note", "Folder", "Export backup", "Restore backup", "Check for updates", "Account").forEach { kind ->
                                 DropdownMenuItem(text = { Text(kind) }, onClick = { createNew(kind) })
                             }
                         }
@@ -258,4 +261,5 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
         LazyColumn { item { TextButton(onClick = { move = null; runtime.run { runtime.repository.moveDocument(doc.id, null) } }) { Text("No folder") } }; items(folders) { target -> TextButton(onClick = { move = null; runtime.run { runtime.repository.moveDocument(doc.id, target.id) } }) { Text(target.name) } } }
     }, confirmButton = { TextButton(onClick = { move = null }) { Text("Cancel") } }) }
     delete?.let { doc -> AlertDialog(onDismissRequest = { delete = null }, title = { Text("Permanently delete ${doc.title}?") }, text = { Text("The saved document and its annotations will be removed. This cannot be undone.") }, confirmButton = { TextButton(onClick = { delete = null; runtime.run { runtime.repository.permanentlyDelete(doc.id) } }) { Text("Delete permanently") } }, dismissButton = { TextButton(onClick = { delete = null }) { Text("Cancel") } }) }
+    if (accountDialog) CloudAccountDialog(runtime) { accountDialog = false }
 }
