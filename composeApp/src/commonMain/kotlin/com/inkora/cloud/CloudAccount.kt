@@ -6,6 +6,7 @@ import com.inkora.domain.model.SyncStatus
 import com.inkora.domain.repository.DocumentRepository
 import com.inkora.platform.platformUuid
 import com.inkora.platform.PlatformFile
+import com.inkora.study.Quiz
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -134,6 +135,11 @@ class CloudAccount(
     suspend fun inviteMember(documentId: String, email: String, role: String = "viewer"): CloudMember = runBusy {
         val current = _session.value ?: error("Sign in to invite a collaborator.")
         client.inviteMember(current, documentId, email, role)
+    }
+
+    suspend fun generateAiQuiz(sourceText: String, requestedCount: Int = 8, difficulty: String = "mixed"): Quiz = runBusy {
+        val current = _session.value ?: error("Sign in under Account before generating a ChatGPT quiz.")
+        client.generateAiQuiz(current, sourceText, requestedCount, difficulty)
     }
 
     private suspend fun persist(value: CloudSession) {

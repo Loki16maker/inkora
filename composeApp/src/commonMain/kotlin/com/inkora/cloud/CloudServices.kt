@@ -3,6 +3,7 @@ package com.inkora.cloud
 import com.inkora.domain.model.DocumentContent
 import com.inkora.domain.model.DocumentType
 import com.inkora.platform.platformUuid
+import com.inkora.study.Quiz
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -299,6 +300,32 @@ class SupabaseClient(
         )
         if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
         return json.decodeFromString(response.body)
+    }
+
+    /** Generates a structured quiz through the authenticated Supabase Edge
+     * Function. The OpenAI key stays in the function's server-side secrets;
+     * this client only sends the selected study text and receives quiz JSON. */
+    suspend fun generateAiQuiz(
+        session: CloudSession,
+        sourceText: String,
+        requestedCount: Int = 8,
+        difficulty: String = "mixed",
+    ): Quiz {
+        require(sourceText.isNotBlank()) { "Add some study material before generating a quiz." }
+        require(difficulty in setOf("easy", "medium", "hard", "mixed")) { "Unsupported quiz difficulty" }
+        val response = request(
+            method = "POST",
+            path = "/functions/v1/generate-quiz",
+            accessToken = session.accessToken,
+            body = buildJsonObject {
+                put("sourceText", sourceText.take(60_000))
+                put("requestedCount", requestedCount.coerceIn(1, 20))
+                put("difficulty", difficulty)
+            },
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        return runCatching { json.decodeFromString<Quiz>(response.body) }
+            .getOrElse { throw CloudException(502, "The AI quiz response was not valid. Try again.") }
     }
 
     private fun parseAuthResponse(response: CloudHttpResponse, success: String): CloudAuthResult {

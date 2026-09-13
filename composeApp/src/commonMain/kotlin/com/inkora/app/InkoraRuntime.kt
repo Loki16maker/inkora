@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import com.inkora.study.ReviewSchedule
+import com.inkora.study.Quiz
 
 /** Restorable pane navigation. Each document retains its own page position. */
 @Serializable
@@ -254,6 +255,9 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
 
     suspend fun resolveCloudShareLink(token: String): com.inkora.cloud.CloudSharedDocument =
         cloud.resolveShareLink(token)
+
+    suspend fun generateAiQuiz(sourceText: String, requestedCount: Int = 8, difficulty: String = "mixed"): Quiz =
+        cloud.generateAiQuiz(sourceText, requestedCount, difficulty)
 
     /** Imports a shared non-PDF snapshot as a new local document. Original
      * PDF bytes remain owner-only until storage transfer is enabled. */
