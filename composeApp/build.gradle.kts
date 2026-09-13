@@ -122,6 +122,7 @@ compose.desktop {
                 menuGroup = "Inkora"
                 shortcut = true
                 upgradeUuid = "c3cc7ed4-1d15-4c8c-a4a5-1b6f7f3d29e1"
+                iconFile.set(project.file("src/desktopMain/resources/inkora.ico"))
             }
         }
     }
@@ -217,7 +218,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 15
+        versionCode = 16
         versionName = rootProject.version.toString()
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")
