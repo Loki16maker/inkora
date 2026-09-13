@@ -234,6 +234,8 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
 
     suspend fun cloudSignUp(email: String, password: String): CloudAuthResult = cloud.signUp(email, password)
 
+    suspend fun cloudSignInWithGoogle(): CloudAuthResult = cloud.signInWithGoogle()
+
     suspend fun cloudSignOut() = cloud.signOut()
 
     suspend fun cloudSync(): CloudSyncSummary = cloud.sync(repository)

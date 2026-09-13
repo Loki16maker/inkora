@@ -110,7 +110,7 @@ compose.desktop {
             // Windows is a primary V1 target: ship a self-contained MSI and
             // keep the unpacked app/EXE available for portable testing.
             targetFormats(TargetFormat.Msi)
-            modules("java.sql")
+            modules("java.sql", "jdk.httpserver")
             packageName = "Inkora"
             packageVersion = rootProject.version.toString()
             description = "Inkora handwritten notebook and PDF study workspace"
@@ -214,7 +214,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 4
+        versionCode = 5
         versionName = rootProject.version.toString()
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")

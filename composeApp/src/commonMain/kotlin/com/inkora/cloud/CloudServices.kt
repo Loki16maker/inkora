@@ -125,6 +125,26 @@ class SupabaseClient(
         return parseAuthResponse(response, "Session refreshed")
     }
 
+    /** Builds the Supabase Auth Google authorization URL using PKCE. */
+    fun googleAuthorizeUrl(redirectUri: String, codeChallenge: String): String =
+        endpoint("/auth/v1/authorize") +
+            "?provider=google" +
+            "&redirect_to=${urlEncode(redirectUri)}" +
+            "&flow_type=pkce" +
+            "&code_challenge=$codeChallenge" +
+            "&code_challenge_method=S256"
+
+    /** Exchanges the one-time authorization code returned by Supabase Auth. */
+    suspend fun exchangePkce(code: String, codeVerifier: String): CloudAuthResult {
+        require(code.isNotBlank()) { "Google sign-in did not return an authorization code." }
+        require(codeVerifier.isNotBlank()) { "Google sign-in expired. Please try again." }
+        val response = request("POST", "/auth/v1/token?grant_type=pkce", body = buildJsonObject {
+            put("auth_code", code)
+            put("code_verifier", codeVerifier)
+        })
+        return parseAuthResponse(response, "Signed in with Google")
+    }
+
     suspend fun signOut(accessToken: String) {
         val response = request("POST", "/auth/v1/logout", accessToken)
         if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
@@ -179,6 +199,14 @@ class SupabaseClient(
             ?: root["error_description"]?.jsonPrimitive?.contentOrNull
             ?: root["error"]?.jsonPrimitive?.contentOrNull
     }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Cloud request failed"
+}
+
+private fun urlEncode(value: String): String = buildString {
+    value.encodeToByteArray().forEach { byte ->
+        val code = byte.toInt() and 0xff
+        val safe = (code in 0x41..0x5a) || (code in 0x61..0x7a) || (code in 0x30..0x39) || code in intArrayOf(0x2d, 0x2e, 0x5f, 0x7e)
+        if (safe) append(code.toChar()) else append('%').append(code.toString(16).uppercase().padStart(2, '0'))
+    }
 }
 
 @Serializable

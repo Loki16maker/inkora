@@ -3,6 +3,7 @@ package com.inkora.cloud
 import com.inkora.domain.model.DocumentContent
 import com.inkora.domain.model.SyncStatus
 import com.inkora.domain.repository.DocumentRepository
+import com.inkora.platform.platformUuid
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,18 @@ class CloudAccount(
 
     suspend fun signUp(email: String, password: String): CloudAuthResult = runBusy {
         val result = client.signUp(email, password)
+        result.session?.let { persist(it) }
+        result
+    }
+
+    suspend fun signInWithGoogle(): CloudAuthResult = runBusy {
+        val verifier = "${platformUuid().replace("-", "")}${platformUuid().replace("-", "")}".take(128)
+        val redirect = oauthRedirectUri()
+        val authorizeUrl = client.googleAuthorizeUrl(redirect, oauthCodeChallenge(verifier))
+        val callback = launchOAuth(authorizeUrl, redirect)
+        callback.error?.let { error("Google sign-in failed: $it") }
+        val code = callback.code ?: error("Google sign-in did not return an authorization code.")
+        val result = client.exchangePkce(code, verifier)
         result.session?.let { persist(it) }
         result
     }

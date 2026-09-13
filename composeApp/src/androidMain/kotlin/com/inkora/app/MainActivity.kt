@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import com.inkora.platform.AndroidFilePickerRegistry
 import com.inkora.platform.AndroidPlatformContext
 import com.inkora.platform.AndroidStylusInputAdapter
+import com.inkora.cloud.AndroidOAuthBridge
 import com.inkora.ui.InkoraApp
 
 /** Android host boundary for platform services and the common Inkora UI. */
@@ -24,10 +25,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AndroidPlatformContext.attachActivity(this)
         runtime = InkoraRuntime(createDocumentRepository())
+        handleOAuthIntent(intent)
         setContent {
             BackHandler { runtime.run { runtime.library() } }
             InkoraApp(runtime)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOAuthIntent(intent)
+    }
+
+    private fun handleOAuthIntent(intent: Intent?) {
+        if (intent?.data != null) AndroidOAuthBridge.dispatch(intent)
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean = super.dispatchTouchEvent(event)

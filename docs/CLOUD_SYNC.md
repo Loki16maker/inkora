@@ -36,8 +36,10 @@ Open **Create → Account** (or **Account** in the wide toolbar), create an
 account or sign in, then choose **Sync now**. Supabase email confirmation may
 require clicking the confirmation link before the first sign-in.
 
-Shared links, PDF storage transfer, conflict resolution, and live collaboration
-are represented by the database tables and realtime publication and are the
-next cloud phase. Google sign-in can be added after the OAuth client IDs are
-created in Google Cloud; the current UI uses email/password so the first build
-does not require a third-party credential.
+Google sign-in is enabled through Supabase Auth. Inkora uses the system browser
+with a PKCE verifier, then receives the one-time callback on Windows through a
+loopback listener (`127.0.0.1:54321`) and on Android through the `inkora://`
+deep link. The Google client secret remains in Supabase and is never shipped in
+the app. Shared links, PDF storage transfer, conflict resolution, and live
+collaboration are represented by the database tables and realtime publication
+and remain the next cloud phase.

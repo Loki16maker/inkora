@@ -72,6 +72,14 @@ fun CloudAccountDialog(runtime: InkoraRuntime, onDismiss: () -> Unit) {
                         if (busy) CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
                         else Text(if (createAccount) "Create account" else "Sign in")
                     }
+                    Text("or", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(
+                        onClick = { runtime.run { val result = runtime.cloudSignInWithGoogle(); runtime.notice.value = result.message } },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Continue with Google")
+                    }
                 }
             }
         },
