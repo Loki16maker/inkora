@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -168,6 +169,7 @@ fun DrawingEditor(
     var shapeKind by remember { mutableStateOf(CanvasShapeKind.RECTANGLE) }
     var drawFinger by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(true) }
+    var showToolPalette by remember(pageKey) { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     var spaceHeld by remember { mutableStateOf(false) }
     val canvasFocus = remember { FocusRequester() }
@@ -281,21 +283,18 @@ fun DrawingEditor(
         }
     }
 
+    fun chooseTool(choice: CanvasEditorTool) {
+        showToolPalette = false
+        if (choice == CanvasEditorTool.IMAGE) insertImage()
+        else {
+            tool = choice
+            if (choice != CanvasEditorTool.LASSO) session.selected = emptySet()
+        }
+    }
+
     Column(modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             Column {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    CanvasEditorTool.entries.filter { it != CanvasEditorTool.FOUNTAIN && it != CanvasEditorTool.PENCIL }.forEach { choice ->
-                        val active = tool == choice || choice == CanvasEditorTool.BALL && tool in listOf(CanvasEditorTool.FOUNTAIN, CanvasEditorTool.PENCIL)
-                        DrawingToolButton(if (choice == CanvasEditorTool.BALL && active) tool.label else choice.label, choice.symbol(), active,
-                            enabled = choice != CanvasEditorTool.IMAGE || !importBusy) {
-                            if (choice == CanvasEditorTool.IMAGE) insertImage()
-                            else { tool = choice; if (choice != CanvasEditorTool.LASSO) session.selected = emptySet() }
-                        }
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     @Suppress("UNUSED_VARIABLE") val historyRevision = session.revision
@@ -530,6 +529,57 @@ fun DrawingEditor(
                         .height(56.dp),
                     contentAlignment = Alignment.Center,
                 ) { footer() }
+            }
+            Box(
+                Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (showToolPalette) {
+                    Surface(
+                        modifier = Modifier.width(188.dp).heightIn(max = 520.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 8.dp,
+                        shadowElevation = 8.dp,
+                    ) {
+                        Column(
+                            Modifier.verticalScroll(rememberScrollState()).padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(start = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("Tools", style = MaterialTheme.typography.titleSmall)
+                                IconButton(
+                                    onClick = { showToolPalette = false },
+                                    modifier = Modifier.semantics { contentDescription = "Close drawing tools" },
+                                ) { Text("×", style = MaterialTheme.typography.titleLarge) }
+                            }
+                            CanvasEditorTool.entries.forEach { choice ->
+                                DrawingToolButton(
+                                    choice.label,
+                                    choice.symbol(),
+                                    active = tool == choice,
+                                    enabled = choice != CanvasEditorTool.IMAGE || !importBusy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onClick = { chooseTool(choice) },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Surface(
+                        onClick = { showToolPalette = true },
+                        modifier = Modifier.size(56.dp).semantics { contentDescription = "Open drawing tools" },
+                        shape = CircleShape,
+                        color = if (tool == CanvasEditorTool.BALL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = if (tool == CanvasEditorTool.BALL) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                        tonalElevation = 8.dp,
+                        shadowElevation = 8.dp,
+                    ) { InkoraIcon(tool.symbol(), Modifier.size(25.dp)) }
+                }
             }
             if (session.elements.isEmpty()) Surface(Modifier.align(Alignment.BottomCenter).padding(16.dp), shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = .95f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
