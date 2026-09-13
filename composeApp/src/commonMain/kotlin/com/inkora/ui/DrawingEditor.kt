@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -155,6 +156,7 @@ fun DrawingEditor(
     background: ImageBitmap? = null,
     template: PaperTemplate = PaperTemplate.BLANK,
     paperColor: Color = Color.White,
+    pageFooter: (@Composable () -> Unit)? = null,
 ) {
     val sessions = remember { mutableMapOf<String, CanvasPageSession>() }
     val session = remember(pageKey) { sessions.getOrPut(pageKey) { CanvasPageSession(elements) } }
@@ -183,11 +185,14 @@ fun DrawingEditor(
     val textMeasurer = rememberTextMeasurer(cacheSize = 64)
     val safePageWidth = pageWidth.coerceAtLeast(1f)
     val safePageHeight = pageHeight.coerceAtLeast(1f)
-    val fitScale = min((viewport.width - 24f).coerceAtLeast(1f) / safePageWidth, (viewport.height - 24f).coerceAtLeast(1f) / safePageHeight)
+    val density = LocalDensity.current
+    val footerReservePx = if (pageFooter != null) with(density) { 56.dp.toPx() } else 0f
+    val availableHeight = (viewport.height - footerReservePx).coerceAtLeast(1f)
+    val fitScale = min((viewport.width - 24f).coerceAtLeast(1f) / safePageWidth, (availableHeight - 24f).coerceAtLeast(1f) / safePageHeight)
     fun currentScale() = fitScale * session.zoom
     fun origin(): Offset {
         val scale = currentScale()
-        return Offset((viewport.width - safePageWidth * scale) / 2f, (viewport.height - safePageHeight * scale) / 2f) + session.pan
+        return Offset((viewport.width - safePageWidth * scale) / 2f, (availableHeight - safePageHeight * scale) / 2f) + session.pan
     }
     fun toPage(position: Offset, pressure: Float = 1f): CanvasPoint {
         val point = (position - origin()) / currentScale()
@@ -200,14 +205,14 @@ fun DrawingEditor(
         val pageAnchor = (anchor - origin()) / currentScale()
         session.zoom = (session.zoom * factor).coerceIn(.005f, 12f)
         val scale = currentScale()
-        val base = Offset((viewport.width - safePageWidth * scale) / 2f, (viewport.height - safePageHeight * scale) / 2f)
+        val base = Offset((viewport.width - safePageWidth * scale) / 2f, (availableHeight - safePageHeight * scale) / 2f)
         session.pan = anchor - base - pageAnchor * scale
     }
     fun fitAll() {
-        val fitted = fitWorkspace(workspaceBounds(safePageWidth, safePageHeight, session.elements), viewport.width.toFloat(), viewport.height.toFloat())
+        val fitted = fitWorkspace(workspaceBounds(safePageWidth, safePageHeight, session.elements), viewport.width.toFloat(), availableHeight)
         session.zoom = fitted.scale / fitScale
         session.pan = Offset(fitted.x - (viewport.width - safePageWidth * fitted.scale) / 2f,
-            fitted.y - (viewport.height - safePageHeight * fitted.scale) / 2f)
+            fitted.y - (availableHeight - safePageHeight * fitted.scale) / 2f)
     }
     fun undo() { session.elements = session.history.undo(); session.revision++; session.selected = emptySet(); onChange(session.elements) }
     fun redo() { session.elements = session.history.redo(); session.revision++; session.selected = emptySet(); onChange(session.elements) }
@@ -509,6 +514,22 @@ fun DrawingEditor(
                             drawRect(Color(0xFF1464A5), Offset(bounds.left - 3, bounds.top - 3), Size(bounds.width + 6, bounds.height + 6), style = Stroke(1.5f / scale))
                         }
                 }
+            }
+            pageFooter?.let { footer ->
+                val footerScale = currentScale()
+                val footerOrigin = origin()
+                Box(
+                    Modifier
+                        .offset {
+                            IntOffset(
+                                footerOrigin.x.roundToInt(),
+                                (footerOrigin.y + safePageHeight * footerScale + with(density) { 4.dp.toPx() }).roundToInt(),
+                            )
+                        }
+                        .width(with(density) { (safePageWidth * footerScale).toDp() })
+                        .height(56.dp),
+                    contentAlignment = Alignment.Center,
+                ) { footer() }
             }
             if (session.elements.isEmpty()) Surface(Modifier.align(Alignment.BottomCenter).padding(16.dp), shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = .95f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
