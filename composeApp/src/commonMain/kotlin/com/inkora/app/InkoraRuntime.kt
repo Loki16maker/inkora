@@ -16,7 +16,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import com.inkora.study.ReviewSchedule
-import com.inkora.study.Quiz
 
 /** Restorable pane navigation. Each document retains its own page position. */
 @Serializable
@@ -256,8 +255,26 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
     suspend fun resolveCloudShareLink(token: String): com.inkora.cloud.CloudSharedDocument =
         cloud.resolveShareLink(token)
 
-    suspend fun generateAiQuiz(sourceText: String, requestedCount: Int = 8, difficulty: String = "mixed"): Quiz =
-        cloud.generateAiQuiz(sourceText, requestedCount, difficulty)
+    /** Copies a no-key prompt and opens the user's existing ChatGPT session.
+     * The consumer ChatGPT website remains in control of authentication and
+     * never exposes its cookies or account session to Inkora. */
+    suspend fun openChatGptQuizPrompt(sourceText: String, difficulty: String = "mixed") {
+        require(sourceText.isNotBlank()) { "Add some study material before opening ChatGPT." }
+        val prompt = buildString {
+            append("Create an accurate study quiz from the material below. Use only the supplied facts.\n")
+            append("Return JSON only with this shape: {\"title\":\"...\",\"questions\":[{\"prompt\":\"...\",\"answer\":\"...\",\"options\":[\"...\"],\"type\":\"MULTIPLE_CHOICE\"|\"TRUE_FALSE\"|\"SHORT_ANSWER\",\"explanation\":\"...\"}]}\n")
+            append("Generate 8 questions at ").append(difficulty).append(" difficulty. Use four choices for multiple choice and [\"true\",\"false\"] for true/false.\n\n")
+            append(sourceText.take(60_000))
+        }
+        val copied = clipboardService().copy(prompt)
+        val opened = externalBrowserService().open("https://chatgpt.com/")
+        notice.value = when {
+            copied && opened -> "Quiz prompt copied. Paste it into ChatGPT, then paste the returned JSON into Inkora."
+            copied -> "Quiz prompt copied. Open ChatGPT, paste it, then paste the returned JSON into Inkora."
+            opened -> "ChatGPT opened. Copy the prompt from Inkora's clipboard failed; use the study text manually."
+            else -> "Could not open ChatGPT. Copy the study text and use chatgpt.com manually."
+        }
+    }
 
     /** Imports a shared non-PDF snapshot as a new local document. Original
      * PDF bytes remain owner-only until storage transfer is enabled. */

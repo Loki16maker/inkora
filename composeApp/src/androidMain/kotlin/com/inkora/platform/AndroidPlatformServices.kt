@@ -215,6 +215,22 @@ class AndroidPrintService(private val context: Context = AndroidPlatformContext.
     }
 }
 
+class AndroidExternalBrowserService(private val context: Context = AndroidPlatformContext.context()) : ExternalBrowserService {
+    override suspend fun open(url: String): Boolean = runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        true
+    }.getOrDefault(false)
+}
+
+class AndroidClipboardService(private val context: Context = AndroidPlatformContext.context()) : ClipboardService {
+    override suspend fun copy(text: String): Boolean = runCatching {
+        val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        manager.setPrimaryClip(android.content.ClipData.newPlainText("Inkora ChatGPT quiz prompt", text))
+        true
+    }.getOrDefault(false)
+}
+
 private class CopyFilePrintAdapter(private val context: Context, private val file: PlatformFile) : android.print.PrintDocumentAdapter() {
     override fun onLayout(
         oldAttributes: android.print.PrintAttributes?,
@@ -259,5 +275,7 @@ actual fun platformFileSystem(): PlatformFileSystem = AndroidPlatformFileSystem(
 actual fun filePicker(): FilePicker = AndroidFilePicker()
 actual fun shareService(): ShareService = AndroidShareService()
 actual fun printService(): PrintService = AndroidPrintService()
+actual fun externalBrowserService(): ExternalBrowserService = AndroidExternalBrowserService()
+actual fun clipboardService(): ClipboardService = AndroidClipboardService()
 actual fun stylusInputProvider(): StylusInputProvider = AndroidStylusInputAdapter()
 actual fun pdfEngine(): PdfEngine = AndroidPdfRendererEngine(AndroidPlatformContext.context())

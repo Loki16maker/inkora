@@ -97,6 +97,16 @@ interface PrintService {
     suspend fun print(file: PlatformFile, jobName: String? = null): PrintResult
 }
 
+/** Opens a public web page in the user's existing browser session. */
+interface ExternalBrowserService {
+    suspend fun open(url: String): Boolean
+}
+
+/** Copies text to the platform clipboard without transmitting it anywhere. */
+interface ClipboardService {
+    suspend fun copy(text: String): Boolean
+}
+
 /** A normalized stream of native pointer samples. Consumers should buffer points off Compose state. */
 enum class StylusToolType { STYLUS, ERASER, FINGER, MOUSE, UNKNOWN }
 
@@ -138,5 +148,7 @@ expect fun officeDocumentImporter(): OfficeDocumentImporter
 expect fun updateService(): UpdateService
 expect fun shareService(): ShareService
 expect fun printService(): PrintService
+expect fun externalBrowserService(): ExternalBrowserService
+expect fun clipboardService(): ClipboardService
 expect fun stylusInputProvider(): StylusInputProvider
 expect fun pdfEngine(): PdfEngine

@@ -83,5 +83,11 @@ actual fun updateService(): UpdateService = object : UpdateService {
 }
 actual fun shareService(): ShareService = IosShareService()
 actual fun printService(): PrintService = IosPrintService()
+actual fun externalBrowserService(): ExternalBrowserService = object : ExternalBrowserService {
+    override suspend fun open(url: String): Boolean = false
+}
+actual fun clipboardService(): ClipboardService = object : ClipboardService {
+    override suspend fun copy(text: String): Boolean = false
+}
 actual fun stylusInputProvider(): StylusInputProvider = IosStylusInputAdapter()
 actual fun pdfEngine(): PdfEngine = UnsupportedPdfEngine("PDFKit integration is reserved for the iOS host target")

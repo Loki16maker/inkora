@@ -11,6 +11,8 @@ import kotlinx.coroutines.withContext
 import java.awt.Desktop
 import java.awt.FileDialog
 import java.awt.GraphicsEnvironment
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 import java.awt.print.PrinterException
 import java.io.File
 import java.net.URI
@@ -175,6 +177,19 @@ class DesktopPrintService : PrintService {
     }
 }
 
+class DesktopExternalBrowserService : ExternalBrowserService {
+    override suspend fun open(url: String): Boolean = withContext(Dispatchers.IO) {
+        if (GraphicsEnvironment.isHeadless() || !Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) return@withContext false
+        runCatching { Desktop.getDesktop().browse(URI(url)); true }.getOrDefault(false)
+    }
+}
+
+class DesktopClipboardService : ClipboardService {
+    override suspend fun copy(text: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null); true }.getOrDefault(false)
+    }
+}
+
 /** Compose/Skiko can feed native pointer samples to this adapter through [submit]. */
 class DesktopStylusInputAdapter : StylusInputProvider {
     private val _events = MutableSharedFlow<StylusEvent>(extraBufferCapacity = 256)
@@ -196,5 +211,7 @@ actual fun platformFileSystem(): PlatformFileSystem = DesktopPlatformFileSystem(
 actual fun filePicker(): FilePicker = DesktopFilePicker()
 actual fun shareService(): ShareService = DesktopShareService()
 actual fun printService(): PrintService = DesktopPrintService()
+actual fun externalBrowserService(): ExternalBrowserService = DesktopExternalBrowserService()
+actual fun clipboardService(): ClipboardService = DesktopClipboardService()
 actual fun stylusInputProvider(): StylusInputProvider = DesktopStylusInputAdapter()
 actual fun pdfEngine(): PdfEngine = PdfBoxPdfEngine()

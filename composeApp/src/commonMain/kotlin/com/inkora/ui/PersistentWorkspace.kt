@@ -97,7 +97,7 @@ fun PersistentWorkspace(runtime: InkoraRuntime, workspace: WorkspaceState) {
     quizSource?.let { source ->
         QuizDialog(source.title, source.text, source.schedule, onScheduleChange = { schedule ->
             runtime.run { runtime.saveReviewSchedule(source.documentId, schedule) }
-        }, onGenerateAiQuiz = { text, count, difficulty -> runtime.generateAiQuiz(text, count, difficulty) }) { quizSource = null }
+        }, onOpenChatGpt = { difficulty -> runtime.run { runtime.openChatGptQuizPrompt(source.text, difficulty) } }) { quizSource = null }
     }
 }
 
