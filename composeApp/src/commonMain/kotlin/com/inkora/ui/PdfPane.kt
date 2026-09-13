@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.inkora.app.InkoraRuntime
 import com.inkora.domain.model.Bookmark
@@ -65,9 +67,6 @@ fun PdfPane(runtime: InkoraRuntime, content: DocumentContent.Pdf, modifier: Modi
 
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(enabled = index > 0, onClick = { runtime.setPage(id, index - 1) }) { Text("‹") }
-            TextButton(onClick = { showPages = true }) { Text("Page ${index + 1} / ${handle?.pageCount ?: content.summary.pageCount}") }
-            TextButton(enabled = index + 1 < content.summary.pageCount, onClick = { runtime.setPage(id, index + 1) }) { Text("›") }
             TextButton(onClick = {
                 runtime.edit(id) {
                     val pdf = it as DocumentContent.Pdf
@@ -97,6 +96,27 @@ fun PdfPane(runtime: InkoraRuntime, content: DocumentContent.Pdf, modifier: Modi
         else DrawingEditor("$id:pdf:$index", content.pageElements[index].orEmpty(), { elements ->
             runtime.edit(id) { (it as DocumentContent.Pdf).copy(pageElements = it.pageElements + (index to elements)) }
         }, size.width, size.height, Modifier.weight(1f), background = image)
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                enabled = index > 0,
+                onClick = { runtime.setPage(id, index - 1) },
+                modifier = Modifier.semantics { contentDescription = "Previous page" },
+            ) { Text("←") }
+            FilledTonalButton(onClick = { showPages = true }) {
+                Text("Page ${index + 1} / ${handle?.pageCount ?: content.summary.pageCount}")
+            }
+            TextButton(
+                enabled = index + 1 < content.summary.pageCount,
+                onClick = { runtime.setPage(id, index + 1) },
+                modifier = Modifier.semantics { contentDescription = "Next page" },
+            ) { Text("→") }
+        }
     }
 
     val document = handle
