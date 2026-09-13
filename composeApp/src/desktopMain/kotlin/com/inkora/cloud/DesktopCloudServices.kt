@@ -15,12 +15,18 @@ import java.util.Properties
 actual fun supabaseConfig(): SupabaseConfig {
     val properties = Properties()
     runCatching {
-        object {}.javaClass.getResourceAsStream("/inkora-supabase.properties")?.use(properties::load)
+        val loader = object {}.javaClass.classLoader
+        (loader?.getResourceAsStream("inkora-supabase.properties")
+            ?: object {}.javaClass.getResourceAsStream("/inkora-supabase.properties"))
+            ?.use(properties::load)
     }
     return SupabaseConfig(
-        url = System.getenv("INKORA_SUPABASE_URL").orEmpty().ifBlank { properties.getProperty("url").orEmpty() },
+        url = System.getenv("INKORA_SUPABASE_URL").orEmpty()
+            .ifBlank { properties.getProperty("url").orEmpty() }
+            .ifBlank { InkoraCloudDefaults.url },
         publishableKey = System.getenv("INKORA_SUPABASE_PUBLISHABLE_KEY").orEmpty()
-            .ifBlank { properties.getProperty("publishableKey").orEmpty() },
+            .ifBlank { properties.getProperty("publishableKey").orEmpty() }
+            .ifBlank { InkoraCloudDefaults.publishableKey },
     )
 }
 

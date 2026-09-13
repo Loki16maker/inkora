@@ -7,8 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 actual fun supabaseConfig(): SupabaseConfig = SupabaseConfig(
-    url = BuildConfig.SUPABASE_URL,
-    publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY,
+    url = BuildConfig.SUPABASE_URL.ifBlank { InkoraCloudDefaults.url },
+    publishableKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY.ifBlank { InkoraCloudDefaults.publishableKey },
 )
 
 actual fun cloudHttpClient(): CloudHttpClient = AndroidCloudHttpClient()
