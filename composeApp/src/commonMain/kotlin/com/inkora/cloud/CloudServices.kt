@@ -25,7 +25,7 @@ data class SupabaseConfig(
 
 /** Safe client-side defaults for the published Inkora build. */
 internal object InkoraCloudDefaults {
-    const val url = "https://gfhjwencfqhxfswscyv.supabase.co"
+    const val url = "https://gfhjwencfqhxfsxwscyv.supabase.co"
     const val publishableKey = "sb_publishable_CbdBFtqexn8ZoRhb5e4_pQ_cMWNHdek"
 }
 
