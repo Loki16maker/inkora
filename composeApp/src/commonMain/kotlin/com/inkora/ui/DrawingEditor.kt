@@ -531,8 +531,8 @@ fun DrawingEditor(
                 ) { footer() }
             }
             Box(
-                Modifier.align(Alignment.CenterStart).padding(start = 12.dp),
-                contentAlignment = Alignment.CenterStart,
+                Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp),
+                contentAlignment = Alignment.BottomStart,
             ) {
                 if (showToolPalette) {
                     Surface(
