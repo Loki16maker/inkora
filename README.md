@@ -31,17 +31,8 @@ The MSI keeps the application registered for future updates. The portable ZIP ca
 
 Download [Inkora-1.3.11-android.apk](https://github.com/Loki16maker/inkora/releases/download/v1.3.11/Inkora-1.3.11-android.apk), allow installation from the browser or file manager when Android asks, and install it over an existing Inkora installation.
 
-## Creating a ChatGPT quiz
 
-1. Open a document and select **Quiz**.
-2. Choose a difficulty and select **Open ChatGPT**.
-3. Paste Inkora's copied prompt into ChatGPT.
-4. Copy ChatGPT's JSON response.
-5. Select **Paste JSON** in Inkora and import the quiz.
-
-Inkora does not store ChatGPT cookies or require an OpenAI API key. 9router is not required. The browser remains responsible for ChatGPT authentication.
-
-## Cloud collaboration
+## Cloud collaboration (soon)
 
 The current cloud layer supports account sign-in, document sync metadata, private storage hooks, share links, invitations, and viewer/commenter/editor roles. Real-time simultaneous drawing and text editing are still planned; shared edits currently use saved snapshots and explicit sync.
 
