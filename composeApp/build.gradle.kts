@@ -217,7 +217,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 13
+        versionCode = 14
         versionName = rootProject.version.toString()
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")
