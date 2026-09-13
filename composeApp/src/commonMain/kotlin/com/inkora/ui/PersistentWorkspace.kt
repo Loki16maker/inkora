@@ -116,6 +116,12 @@ private fun PersistentDocumentPane(runtime: InkoraRuntime, id: String, modifier:
                 is SaveState.Failed -> "Save failed · Retry"
             }
             TextButton(onClick = { runtime.run { store.saveNow(); (store.saveState.value as? SaveState.Failed)?.let { runtime.error.value = it.message } } }) {
+                InkoraIcon(
+                    if (saved is SaveState.Failed) InkoraSymbol.ERASE else InkoraSymbol.CHECK,
+                    Modifier.size(16.dp),
+                    if (saved is SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(5.dp))
                 Text(label, style = MaterialTheme.typography.labelSmall, color = if (saved is SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             }
         }

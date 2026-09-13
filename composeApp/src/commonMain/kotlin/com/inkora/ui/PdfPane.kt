@@ -66,26 +66,43 @@ fun PdfPane(runtime: InkoraRuntime, content: DocumentContent.Pdf, modifier: Modi
     }
 
     Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = {
-                runtime.edit(id) {
-                    val pdf = it as DocumentContent.Pdf
-                    val existing = pdf.bookmarks.any { mark -> mark.pageIndex == index }
-                    pdf.copy(bookmarks = if (existing) pdf.bookmarks.filter { mark -> mark.pageIndex != index }
-                        else pdf.bookmarks + Bookmark(platformUuid(), pdf.summary.id, index, "Page ${index + 1}", createdAtEpochMs = platformEpochMillis()))
-                }
-            }) { Text(if (content.bookmarks.any { it.pageIndex == index }) "★ Bookmarked" else "☆ Bookmark") }
-            TextButton(onClick = { bookmarksDialog = true }) { Text("Bookmarks") }
-            TextButton(enabled = handle != null, onClick = { searchDialog = true }) { Text("Find text") }
-            TextButton(enabled = handle != null, onClick = { handle?.let { doc -> runtime.run { outlines = runtime.pdf.outline(doc) } } }) { Text("Contents") }
-            TextButton(enabled = handle != null && !exporting, onClick = { exportDialog = true }) { Text(if (exporting) "Exporting…" else "Export PDF") }
-            exported?.let { file -> TextButton(onClick = { runtime.run {
-                when (shareService().share(file, "Annotated PDF")) {
-                    ShareResult.FAILED -> error("The export was saved, but the share window could not open: ${file.path}")
-                    ShareResult.UNAVAILABLE -> runtime.notice.value = "Export saved at ${file.path}"
-                    ShareResult.SHARED -> Unit
-                }
-            } }) { Text("Share export") } }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            WorkspaceAction(
+                if (content.bookmarks.any { it.pageIndex == index }) "Bookmarked" else "Bookmark",
+                InkoraSymbol.STAR,
+                onClick = {
+                    runtime.edit(id) {
+                        val pdf = it as DocumentContent.Pdf
+                        val existing = pdf.bookmarks.any { mark -> mark.pageIndex == index }
+                        pdf.copy(bookmarks = if (existing) pdf.bookmarks.filter { mark -> mark.pageIndex != index }
+                            else pdf.bookmarks + Bookmark(platformUuid(), pdf.summary.id, index, "Page ${index + 1}", createdAtEpochMs = platformEpochMillis()))
+                    }
+                },
+            )
+            WorkspaceAction("Bookmarks", InkoraSymbol.STAR, onClick = { bookmarksDialog = true })
+            WorkspaceAction("Find text", InkoraSymbol.SEARCH, enabled = handle != null, onClick = { searchDialog = true })
+            WorkspaceAction("Contents", InkoraSymbol.BOOK, enabled = handle != null, onClick = {
+                handle?.let { doc -> runtime.run { outlines = runtime.pdf.outline(doc) } }
+            })
+            WorkspaceAction(
+                if (exporting) "Exporting…" else "Export PDF",
+                InkoraSymbol.DOWNLOAD,
+                enabled = handle != null && !exporting,
+                onClick = { exportDialog = true },
+            )
+            exported?.let { file ->
+                WorkspaceAction("Share export", InkoraSymbol.DOWNLOAD, onClick = { runtime.run {
+                    when (shareService().share(file, "Annotated PDF")) {
+                        ShareResult.FAILED -> error("The export was saved, but the share window could not open: ${file.path}")
+                        ShareResult.UNAVAILABLE -> runtime.notice.value = "Export saved at ${file.path}"
+                        ShareResult.SHARED -> Unit
+                    }
+                } })
+            }
         }
         val image = bitmap
         val size = pageSize
@@ -110,6 +127,10 @@ fun PdfPane(runtime: InkoraRuntime, content: DocumentContent.Pdf, modifier: Modi
                     FilledTonalButton(onClick = { showPages = true }) {
                         Text("Page ${index + 1} / ${handle?.pageCount ?: content.summary.pageCount}")
                     }
+                    IconButton(
+                        onClick = { showPages = true },
+                        modifier = Modifier.semantics { contentDescription = "Open page overview" },
+                    ) { InkoraIcon(InkoraSymbol.GRID) }
                     TextButton(
                         enabled = index + 1 < content.summary.pageCount,
                         onClick = { runtime.setPage(id, index + 1) },
