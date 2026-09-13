@@ -9,11 +9,12 @@ import java.util.zip.ZipFile
 private class AndroidOfficeDocumentImporter : OfficeDocumentImporter {
     override suspend fun extractText(source: PlatformFile): String = withContext(Dispatchers.IO) {
         val extension = source.displayName.substringAfterLast('.', "").lowercase()
-        require(extension == "docx" || extension == "pptx") {
-            "${source.displayName} uses the legacy Office format. Save it as .docx or .pptx and import again."
-        }
         require(File(source.path).isFile) { "Office source does not exist: ${source.path}" }
-        ZipFile(source.path).use { zip -> if (extension == "docx") readDocx(zip) else readPptx(zip) }
+        when (extension) {
+            "docx", "docm", "pptx", "pptm" -> ZipFile(source.path).use { zip -> if (extension.startsWith("doc")) readDocx(zip) else readPptx(zip) }
+            "doc", "ppt" -> readLegacyOffice(File(source.path))
+            else -> error("Inkora supports PDF, DOC/DOCX and PPT/PPTX files.")
+        }
             .trim().ifBlank { error("No readable text was found in ${source.displayName}") }
     }
 
@@ -43,6 +44,21 @@ private class AndroidOfficeDocumentImporter : OfficeDocumentImporter {
     private fun decodeXml(value: String): String = value
         .replace("&lt;", "<").replace("&gt;", ">")
         .replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+
+    private fun readLegacyOffice(file: File): String {
+        val bytes = file.readBytes()
+        fun runs(chars: Sequence<Char>): List<String> = buildList {
+            val current = StringBuilder()
+            fun flush() { if (current.length >= 4) add(current.toString().replace(Regex("\\s+"), " ").trim()); current.clear() }
+            chars.forEach { char ->
+                if (char == '\n' || char == '\r' || char == '\t' || char in ' '..'~') current.append(char) else flush()
+            }
+            flush()
+        }
+        val utf16 = runs((0 until bytes.size - 1 step 2).asSequence().map { (((bytes[it + 1].toInt() and 0xff) shl 8) or (bytes[it].toInt() and 0xff)).toChar() })
+        val ascii = runs(bytes.asSequence().map { (it.toInt() and 0xff).toChar() })
+        return (utf16 + ascii).distinct().sortedByDescending { it.length }.take(120).joinToString("\n")
+    }
 }
 
 actual fun officeDocumentImporter(): OfficeDocumentImporter = AndroidOfficeDocumentImporter()

@@ -29,6 +29,9 @@ import com.inkora.platform.platformEpochMillis
 import com.inkora.platform.platformUuid
 import com.inkora.platform.ShareResult
 import com.inkora.platform.shareService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /** Application routes always use the local repository; there is no generated sample library. */
 @Composable
@@ -79,11 +82,36 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
     var folderDialog by remember { mutableStateOf(false) }
     var move by remember { mutableStateOf<DocumentSummary?>(null) }
     var delete by remember { mutableStateOf<DocumentSummary?>(null) }
+    var inviteDocument by remember { mutableStateOf<DocumentSummary?>(null) }
+    var shareLinksDocument by remember { mutableStateOf<DocumentSummary?>(null) }
     var accountDialog by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
+    var inviteEmail by remember { mutableStateOf("") }
+    var inviteRole by remember { mutableStateOf("viewer") }
+    var searchMatches by remember { mutableStateOf<Set<DocumentId>?>(null) }
+    var searching by remember { mutableStateOf(false) }
+
+    // Search the complete stored snapshot (titles, imported Office text,
+    // notes, bookmarks and annotation text), not only the card title.
+    LaunchedEffect(query, documents) {
+        val normalized = query.trim()
+        if (normalized.isBlank()) {
+            searchMatches = null
+            searching = false
+        } else {
+            searching = true
+            // Debounce typing and keep SQLDelight metadata scans off the UI
+            // dispatcher. Large imported Office snapshots can be sizeable.
+            delay(150)
+            searchMatches = withContext(Dispatchers.Default) {
+                runtime.repository.searchTitles(normalized).mapTo(hashSetOf()) { it.id }
+            }
+            searching = false
+        }
+    }
     val filtered = documents.filter {
         it.isTrashed == (section == "Trash") && (section != "Favorites" || it.isFavorite) &&
-            (folder == null || it.folderId == folder) && it.title.contains(query, ignoreCase = true)
+            (folder == null || it.folderId == folder) && (searchMatches == null || it.id in searchMatches!!)
     }.sortedByDescending { it.modifiedAtEpochMs }
 
     fun createNew(kind: String) {
@@ -180,7 +208,8 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
                     Text(folder?.let { selected -> folders.firstOrNull { it.id == selected }?.name } ?: when(section) { "Documents" -> "A little room to think."; "Favorites" -> "Keep the good ideas close."; else -> "Trash" }, style = MaterialTheme.typography.headlineSmall)
                     Text(if (section == "Trash") "Restore a document, or remove it permanently." else "Notebooks, PDFs and ideas — all in one place.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 12.dp), singleLine = true,
-                        shape = RoundedCornerShape(12.dp), label = { Text("Search your documents") }, leadingIcon = { InkoraIcon(InkoraSymbol.SEARCH) })
+                        shape = RoundedCornerShape(12.dp), label = { Text("Search your documents") }, leadingIcon = { InkoraIcon(InkoraSymbol.SEARCH) },
+                        supportingText = { if (searching) Text("Searching titles, notes and imported text…") else if (query.isNotBlank()) Text("Search includes document content") })
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = if (wide) 32.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${filtered.size} ${if (filtered.size == 1) "document" else "documents"}", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -211,7 +240,13 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
                             }
                             Column(Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) {
                                 Text(doc.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text(if (doc.pageCount > 0) "${doc.pageCount} ${if (doc.pageCount == 1) "page" else "pages"} · Local" else "Saved locally", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val page = workspace.pages[doc.id.value]
+                                val pageLabel = if (doc.pageCount > 0) {
+                                    val progress = page?.plus(1)?.coerceIn(1, doc.pageCount)
+                                    "${doc.pageCount} ${if (doc.pageCount == 1) "page" else "pages"}" +
+                                        (progress?.let { " · Last viewed $it/${doc.pageCount}" } ?: "")
+                                } else "Saved locally"
+                                Text(pageLabel, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                     if (doc.isTrashed) {
                                         TextButton(onClick = { runtime.run { runtime.repository.restoreFromTrash(doc.id) } }) { Text("Restore") }
@@ -224,6 +259,23 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
                                             DropdownMenu(menu, { menu = false }) {
                                                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; name = doc.title; rename = doc })
                                                 DropdownMenuItem(text = { Text("Move to folder") }, onClick = { menu = false; move = doc })
+                                                DropdownMenuItem(text = { Text("Create share link") }, onClick = {
+                                                    menu = false
+                                                    runtime.run {
+                                                        val link = runtime.createCloudShareLink(doc.id.value)
+                                                        runtime.notice.value = "Share link created for ${doc.title}:\n${link.url}\n\nSend this link to a collaborator."
+                                                    }
+                                                })
+                                                DropdownMenuItem(text = { Text("Manage share links") }, onClick = {
+                                                    menu = false
+                                                    shareLinksDocument = doc
+                                                })
+                                                DropdownMenuItem(text = { Text("Invite collaborator") }, onClick = {
+                                                    menu = false
+                                                    inviteEmail = ""
+                                                    inviteRole = "viewer"
+                                                    inviteDocument = doc
+                                                })
                                                 DropdownMenuItem(text = { Text("Move to trash") }, onClick = { menu = false; runtime.run { runtime.trash(doc) } })
                                             }
                                         }
@@ -261,5 +313,75 @@ private fun PersistentLibrary(runtime: InkoraRuntime) {
         LazyColumn { item { TextButton(onClick = { move = null; runtime.run { runtime.repository.moveDocument(doc.id, null) } }) { Text("No folder") } }; items(folders) { target -> TextButton(onClick = { move = null; runtime.run { runtime.repository.moveDocument(doc.id, target.id) } }) { Text(target.name) } } }
     }, confirmButton = { TextButton(onClick = { move = null }) { Text("Cancel") } }) }
     delete?.let { doc -> AlertDialog(onDismissRequest = { delete = null }, title = { Text("Permanently delete ${doc.title}?") }, text = { Text("The saved document and its annotations will be removed. This cannot be undone.") }, confirmButton = { TextButton(onClick = { delete = null; runtime.run { runtime.repository.permanentlyDelete(doc.id) } }) { Text("Delete permanently") } }, dismissButton = { TextButton(onClick = { delete = null }) { Text("Cancel") } }) }
+    inviteDocument?.let { doc ->
+        AlertDialog(
+            onDismissRequest = { inviteDocument = null },
+            title = { Text("Invite collaborator") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Give an existing Inkora account access to ${doc.title}.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(inviteEmail, { inviteEmail = it }, singleLine = true, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("viewer", "commenter", "editor").forEach { role ->
+                            FilterChip(selected = inviteRole == role, onClick = { inviteRole = role }, label = { Text(role.replaceFirstChar { it.uppercase() }) })
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = inviteEmail.contains('@'), onClick = {
+                    val email = inviteEmail
+                    inviteDocument = null
+                    runtime.run {
+                        runtime.inviteCloudMember(doc.id.value, email, inviteRole)
+                        runtime.notice.value = "Collaborator invited as ${inviteRole}."
+                    }
+                }) { Text("Invite") }
+            },
+            dismissButton = { TextButton(onClick = { inviteDocument = null }) { Text("Cancel") } },
+        )
+    }
+    shareLinksDocument?.let { doc -> ShareLinksDialog(runtime, doc) { shareLinksDocument = null } }
     if (accountDialog) CloudAccountDialog(runtime) { accountDialog = false }
+}
+
+@Composable
+private fun ShareLinksDialog(runtime: InkoraRuntime, document: DocumentSummary, onDismiss: () -> Unit) {
+    val session by runtime.cloud.session.collectAsState()
+    var links by remember(document.id.value, session) { mutableStateOf<List<com.inkora.cloud.CloudShareLinkRow>?>(null) }
+    var loading by remember(document.id.value, session) { mutableStateOf(false) }
+    LaunchedEffect(document.id.value, session) {
+        if (session != null) {
+            loading = true
+            links = runCatching { runtime.listCloudShareLinks(document.id.value) }.getOrNull()
+            loading = false
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share links") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (session == null) Text("Sign in to Inkora cloud to manage links.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else if (loading) CircularProgressIndicator()
+                else if (links.isNullOrEmpty()) Text("No active links for this document.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else links!!.forEach { link ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(link.role.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.titleSmall)
+                            Text(link.createdAt ?: "Active link", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            runtime.run {
+                                runtime.revokeCloudShareLink(link.id)
+                                links = links.orEmpty().filterNot { it.id == link.id }
+                                runtime.notice.value = "Share link revoked."
+                            }
+                        }) { Text("Revoke") }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }

@@ -39,7 +39,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleOAuthIntent(intent: Intent?) {
-        if (intent?.data != null) AndroidOAuthBridge.dispatch(intent)
+        val data = intent?.data ?: return
+        if (data.host == "auth") {
+            AndroidOAuthBridge.dispatch(intent)
+        } else if (data.host == "share") {
+            val token = data.pathSegments.lastOrNull().orEmpty()
+            if (token.isNotBlank()) runtime.run {
+                val imported = runtime.importCloudShareLink(token)
+                runtime.notice.value = "Shared document imported: ${imported.title}"
+            }
+        }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean = super.dispatchTouchEvent(event)

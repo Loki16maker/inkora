@@ -112,7 +112,14 @@ selectAllFolders:
 SELECT * FROM folders ORDER BY name COLLATE NOCASE;
 
 searchDocuments:
-SELECT * FROM documents WHERE is_trashed = 0 AND title LIKE '%' || :query || '%' COLLATE NOCASE ORDER BY title COLLATE NOCASE;
+SELECT * FROM documents
+WHERE is_trashed = 0
+  AND (
+    title LIKE '%' || :query || '%' COLLATE NOCASE
+    OR source_file_name LIKE '%' || :query || '%' COLLATE NOCASE
+    OR metadata_json LIKE '%' || :query || '%' COLLATE NOCASE
+  )
+ORDER BY title COLLATE NOCASE;
 
 selectDocumentById:
 SELECT * FROM documents WHERE id = :id;

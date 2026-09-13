@@ -104,8 +104,10 @@ public class InMemoryDocumentRepository : DocumentRepository {
         val normalized = query.trim().lowercase()
         if (normalized.isEmpty()) return emptyList()
         return documents.value.values
+            .filter { document ->
+                !document.summary.isTrashed && searchableText(document).contains(normalized)
+            }
             .map { it.summary }
-            .filter { !it.isTrashed && it.title.lowercase().contains(normalized) }
             .sortedBy { it.title.lowercase() }
     }
 
@@ -118,4 +120,25 @@ public class InMemoryDocumentRepository : DocumentRepository {
         is DocumentContent.TextDocument -> copy(summary = summary.transform())
         is DocumentContent.QuickNote -> copy(summary = summary.transform())
     }
+
+    /** Keep preview/test search behavior aligned with the SQLDelight metadata search. */
+    private fun searchableText(document: DocumentContent): String = buildString {
+        append(document.summary.title).append(' ').append(document.summary.sourceFileName.orEmpty())
+        when (document) {
+            is DocumentContent.Notebook -> document.pages.forEach { page ->
+                append(' ').append(page.title.orEmpty())
+                page.elements.forEach { element -> if (element is com.inkora.drawing.CanvasElement.Text) append(' ').append(element.text) }
+            }
+            is DocumentContent.Pdf -> {
+                document.bookmarks.forEach { append(' ').append(it.title.orEmpty()).append(' ').append(it.note.orEmpty()) }
+                document.pageElements.values.flatten().forEach { element -> if (element is com.inkora.drawing.CanvasElement.Text) append(' ').append(element.text) }
+            }
+            is DocumentContent.Whiteboard -> {
+                document.objects.forEach { if (it is com.inkora.domain.model.WhiteboardObject.TextObject) append(' ').append(it.text) }
+                document.elements.forEach { element -> if (element is com.inkora.drawing.CanvasElement.Text) append(' ').append(element.text) }
+            }
+            is DocumentContent.TextDocument -> append(' ').append(document.markdown)
+            is DocumentContent.QuickNote -> append(' ').append(document.text)
+        }
+    }.lowercase()
 }

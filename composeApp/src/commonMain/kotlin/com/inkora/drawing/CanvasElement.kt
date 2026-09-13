@@ -36,6 +36,38 @@ enum class CanvasInkTool { BALL, FOUNTAIN, PENCIL, HIGHLIGHTER }
 @Serializable
 enum class CanvasShapeKind { LINE, RECTANGLE, ELLIPSE, ARROW }
 
+/** Recognizes deliberately drawn geometric gestures while keeping ordinary
+ * handwriting as ink. The caller can opt in with the editor's Auto-shape
+ * toggle; no network or handwriting service is involved. */
+fun List<CanvasPoint>.recognizeShape(): CanvasShapeKind? {
+    if (size < 6) return null
+    val first = first()
+    val last = last()
+    val minX = minOf { it.x }
+    val maxX = maxOf { it.x }
+    val minY = minOf { it.y }
+    val maxY = maxOf { it.y }
+    val width = maxX - minX
+    val height = maxY - minY
+    if (width < 12f && height < 12f) return null
+    val pathLength = zipWithNext().sumOf { (a, b) -> kotlin.math.hypot((b.x - a.x).toDouble(), (b.y - a.y).toDouble()) }.toFloat()
+    val maxDeviation = maxOf { pointSegmentDistance(it, first, last) }
+    val closed = kotlin.math.hypot((last.x - first.x).toDouble(), (last.y - first.y).toDouble()) <= max(width, height) * .22f
+    if (!closed && pathLength > 0 && maxDeviation <= max(width, height) * .08f) return CanvasShapeKind.LINE
+    if (!closed) return null
+    val perimeter = 2f * (width + height)
+    val rectangularity = if (perimeter > 0f) pathLength / perimeter else 0f
+    if (rectangularity in .72f..1.35f) return CanvasShapeKind.RECTANGLE
+    val centerX = (minX + maxX) / 2f
+    val centerY = (minY + maxY) / 2f
+    val radius = ((width + height) / 4f).coerceAtLeast(1f)
+    val radialError = map { point ->
+        val distance = kotlin.math.hypot((point.x - centerX).toDouble(), (point.y - centerY).toDouble()).toFloat()
+        kotlin.math.abs(distance - radius) / radius
+    }.average()
+    return if (radialError < .28) CanvasShapeKind.ELLIPSE else null
+}
+
 /** Persisted drawing objects keep their own style and their order in the containing list. */
 @Serializable
 sealed interface CanvasElement {

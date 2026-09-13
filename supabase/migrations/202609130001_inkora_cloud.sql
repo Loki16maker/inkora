@@ -56,6 +56,63 @@ create index if not exists document_revisions_document_version_idx
 create index if not exists share_links_document_idx
     on public.share_links(document_id, created_at desc);
 
+-- Public link resolution uses the one-time token embedded in an Inkora share
+-- URL. Only the minimum document snapshot is returned, and revoked/expired
+-- links are rejected. The token itself is never stored in the database.
+create or replace function public.resolve_share_link(raw_token text)
+returns table (document_id uuid, title text, kind text, payload jsonb, role text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+    select d.id, d.title, d.kind, d.payload, l.role
+    from public.share_links l
+    join public.documents d on d.id = l.document_id
+    where l.token_hash = rtrim(translate(encode(digest(raw_token, 'sha256'), 'base64'), '+/', '-_'), '=')
+      and l.revoked_at is null
+      and (l.expires_at is null or l.expires_at > timezone('utc', now()));
+$$;
+
+-- Supabase functions default to EXECUTE for PUBLIC. Restrict this RPC to the
+-- two client roles that need it, while keeping the document rows themselves
+-- private behind the function's minimal return shape.
+revoke all on function public.resolve_share_link(text) from public;
+grant execute on function public.resolve_share_link(text) to anon, authenticated;
+
+-- Owners can invite collaborators by email without exposing auth.users to the
+-- client. Upserts make changing a collaborator's role idempotent.
+create or replace function public.invite_document_member(target_document_id uuid, invitee_email text, member_role text default 'viewer')
+returns public.document_members
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+    invitee uuid;
+    member_row public.document_members;
+begin
+    if not exists (select 1 from public.documents where id = target_document_id and owner_id = auth.uid()) then
+        raise exception 'Only the document owner can invite collaborators';
+    end if;
+    if member_role not in ('viewer', 'commenter', 'editor') then
+        raise exception 'Unsupported collaborator role';
+    end if;
+    select id into invitee from auth.users where lower(email) = lower(trim(invitee_email)) limit 1;
+    if invitee is null then
+        raise exception 'No Inkora account was found for that email';
+    end if;
+    insert into public.document_members(document_id, user_id, role)
+    values (target_document_id, invitee, member_role)
+    on conflict (document_id, user_id) do update set role = excluded.role
+    returning * into member_row;
+    return member_row;
+end;
+$$;
+
+revoke all on function public.invite_document_member(uuid, text, text) from public;
+grant execute on function public.invite_document_member(uuid, text, text) to authenticated;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql

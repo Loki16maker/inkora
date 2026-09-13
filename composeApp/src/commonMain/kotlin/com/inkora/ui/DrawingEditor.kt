@@ -88,6 +88,7 @@ import com.inkora.drawing.insideLasso
 import com.inkora.drawing.scaled
 import com.inkora.drawing.smoothStroke
 import com.inkora.drawing.translated
+import com.inkora.drawing.recognizeShape
 import com.inkora.platform.FilePickerRequest
 import com.inkora.platform.PlatformFile
 import com.inkora.platform.decodeImage
@@ -168,6 +169,7 @@ fun DrawingEditor(
     var width by remember { mutableStateOf(2.5f) }
     var shapeKind by remember { mutableStateOf(CanvasShapeKind.RECTANGLE) }
     var drawFinger by remember { mutableStateOf(false) }
+    var autoShape by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(true) }
     var showToolPalette by remember(pageKey) { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -340,6 +342,7 @@ fun DrawingEditor(
                         }
                     }
                     FilterChip(selected = drawFinger, onClick = { drawFinger = !drawFinger }, label = { Text("Finger ink") })
+                    FilterChip(selected = autoShape, onClick = { autoShape = !autoShape }, label = { Text("Auto-shape") })
                     if (session.selected.isNotEmpty()) {
                         VerticalDivider(Modifier.height(24.dp))
                         WorkspaceAction("Delete ${session.selected.size}", InkoraSymbol.TRASH, { deleteSelection() })
@@ -382,8 +385,8 @@ fun DrawingEditor(
                         else -> false
                     }
                 }.focusable()
-                .semantics { contentDescription = "Drawing workspace. Ink anywhere around the page. Select Pan to move, or Fit all notes to see everything." }
-                .pointerInput(pageKey, viewport, tool, width, color, shapeKind, drawFinger, safePageWidth, safePageHeight) {
+                .semantics { contentDescription = "Drawing workspace. Ink anywhere around the page. Select Pan to move, or Fit all notes to see everything. Auto-shape recognizes lines, rectangles and ellipses." }
+                .pointerInput(pageKey, viewport, tool, width, color, shapeKind, drawFinger, autoShape, safePageWidth, safePageHeight) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         canvasFocus.requestFocus()
@@ -461,7 +464,13 @@ fun DrawingEditor(
                         } while (pressed)
                         if (!multiTouch && !panOnly) {
                             when {
-                                actualTool.isInk() && activePoints.isNotEmpty() -> commit(initial + activeInk(actualTool, activePoints.toList(), color, width).copy(id = canvasId()))
+                                actualTool.isInk() && activePoints.isNotEmpty() -> {
+                                    val points = activePoints.toList()
+                                    val recognized = if (autoShape && actualTool != CanvasEditorTool.HIGHLIGHTER) points.recognizeShape() else null
+                                    if (recognized != null) {
+                                        commit(initial + CanvasElement.Shape(canvasId(), recognized, points.first(), points.last(), color, width))
+                                    } else commit(initial + activeInk(actualTool, points, color, width).copy(id = canvasId()))
+                                }
                                 actualTool == CanvasEditorTool.ERASER || selectionHit -> commit(session.elements)
                                 actualTool == CanvasEditorTool.SHAPE -> activeShape?.let { commit(initial + it) }
                                 actualTool == CanvasEditorTool.LASSO -> {

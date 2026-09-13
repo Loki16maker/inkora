@@ -3,9 +3,9 @@
 Inkora uses Supabase for optional account-backed sync on Windows and Android.
 The local SQLDelight database remains the source of truth while a signed-in
 account is offline-first: local snapshots are uploaded during **Sync now**, and
-new notebook, whiteboard, text-document, and quick-note snapshots are pulled to
-the device. PDF bytes stay local until the storage upload phase is enabled, so a
-PDF is never recreated without its original file.
+new notebook, whiteboard, text-document, quick-note, and PDF snapshots are
+pulled to the device. PDF bytes are transferred through the private storage
+bucket, so a PDF is never recreated without its original file.
 
 ## Project
 
@@ -40,6 +40,18 @@ Google sign-in is enabled through Supabase Auth. Inkora uses the system browser
 with a PKCE verifier, then receives the one-time callback on Windows through a
 loopback listener (`127.0.0.1:54321`) and on Android through the `inkora://`
 deep link. The Google client secret remains in Supabase and is never shipped in
-the app. Shared links, PDF storage transfer, conflict resolution, and live
-collaboration are represented by the database tables and realtime publication
-and remain the next cloud phase.
+the app.
+
+From a document card, **Create share link** creates a role-scoped, revocable
+link (viewer, commenter, or editor). **Invite collaborator** adds an existing
+Inkora account by email and updates its role idempotently. Share tokens are
+generated locally and only their SHA-256 digest is stored in Supabase. The
+`resolve_share_link` SQL function rejects revoked or expired links before
+returning the shared snapshot. Sync now also applies a remote snapshot when it
+has a newer local modification timestamp and transfers PDF bytes through the
+private storage bucket.
+
+On Android, opening an `inkora://share/<token>` link imports the shared
+non-PDF snapshot into the recipient's local library. PDF share links still
+require the owner to provide a storage-backed download in a future web route;
+the app deliberately avoids creating a broken local PDF from metadata alone.

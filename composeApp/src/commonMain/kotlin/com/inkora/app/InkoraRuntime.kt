@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import com.inkora.study.ReviewSchedule
 
 /** Restorable pane navigation. Each document retains its own page position. */
@@ -150,7 +151,7 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
                     managed = null // The repository now owns the imported copy.
                     open(summary.id.value)
                 }
-                "docx", "pptx" -> {
+                "doc", "docx", "docm", "ppt", "pptx", "pptm" -> {
                     managed = files.importToManagedStorage(source, "${platformUuid()}.$extension")
                     val text = officeDocumentImporter().extractText(managed)
                     val now = platformEpochMillis()
@@ -240,6 +241,45 @@ class InkoraRuntime(val repository: DocumentRepository, uiDispatcher: CoroutineD
 
     suspend fun cloudSync(): CloudSyncSummary = cloud.sync(repository)
 
+    suspend fun createCloudShareLink(documentId: String, role: String = "viewer"): com.inkora.cloud.CloudShareLink =
+        cloud.createShareLink(documentId, role)
+
+    suspend fun inviteCloudMember(documentId: String, email: String, role: String = "viewer"): com.inkora.cloud.CloudMember =
+        cloud.inviteMember(documentId, email, role)
+
+    suspend fun listCloudShareLinks(documentId: String): List<com.inkora.cloud.CloudShareLinkRow> =
+        cloud.listShareLinks(documentId)
+
+    suspend fun revokeCloudShareLink(linkId: String) = cloud.revokeShareLink(linkId)
+
+    suspend fun resolveCloudShareLink(token: String): com.inkora.cloud.CloudSharedDocument =
+        cloud.resolveShareLink(token)
+
+    /** Imports a shared non-PDF snapshot as a new local document. Original
+     * PDF bytes remain owner-only until storage transfer is enabled. */
+    suspend fun importCloudShareLink(token: String): DocumentSummary {
+        val shared = cloud.resolveShareLink(token)
+        require(shared.kind != DocumentType.PDF.name) { "Shared PDF files need storage access; ask the owner to export and share the PDF." }
+        val incoming = codec.decodeFromJsonElement<DocumentContent>(shared.payload)
+        val id = DocumentId(platformUuid())
+        val summary = incoming.summary.copy(
+            id = id,
+            title = "Shared · ${incoming.summary.title}",
+            syncStatus = SyncStatus.LOCAL_ONLY,
+            modifiedAtEpochMs = platformEpochMillis(),
+        )
+        val imported = when (incoming) {
+            is DocumentContent.Notebook -> incoming.copy(summary = summary, pages = incoming.pages.map { it.copy(documentId = id) })
+            is DocumentContent.Pdf -> error("Shared PDF files need storage access; ask the owner to export and share the PDF.")
+            is DocumentContent.Whiteboard -> incoming.copy(summary = summary)
+            is DocumentContent.TextDocument -> incoming.copy(summary = summary, sourceFilePath = null)
+            is DocumentContent.QuickNote -> incoming.copy(summary = summary)
+        }
+        repository.saveDocument(imported)
+        open(id.value)
+        return summary
+    }
+
     suspend fun favorite(summary: DocumentSummary) {
         repository.setFavorite(summary.id, !summary.isFavorite)
         editors.remove(summary.id.value)?.close()
@@ -283,6 +323,8 @@ private val SUPPORTED_IMPORT_MIME_TYPES = listOf(
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-word.document.macroEnabled.12",
+    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
     "application/msword",
     "application/vnd.ms-powerpoint",
 )

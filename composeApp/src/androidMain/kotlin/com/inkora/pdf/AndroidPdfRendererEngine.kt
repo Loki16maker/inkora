@@ -9,14 +9,22 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.inkora.platform.PlatformFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
@@ -28,6 +36,8 @@ import kotlinx.coroutines.sync.withLock
 class AndroidPdfRendererEngine(private val context: android.content.Context) : PdfEngine {
     private data class OpenPdf(val descriptor: ParcelFileDescriptor, val renderer: PdfRenderer, val mutex: Mutex = Mutex())
     private val documents = ConcurrentHashMap<String, OpenPdf>()
+    private val ocrRecognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    private val ocrCache = ConcurrentHashMap<String, String>()
 
     override suspend fun openDocument(source: PlatformFile): PdfDocument = withContext(Dispatchers.IO) {
         val file = File(source.path)
@@ -82,10 +92,57 @@ class AndroidPdfRendererEngine(private val context: android.content.Context) : P
         return render(document, pageIndex, PdfRenderRequest(targetWidthPx = longestSidePx, targetHeightPx = longestSidePx))
     }
 
-    override suspend fun extractText(document: PdfDocument, pageIndex: Int?): String =
-        error("Android's system PDF renderer cannot extract text from this document")
+    /** Runs on-device ML Kit OCR over rendered pages and caches each result for this session. */
+    override suspend fun extractText(document: PdfDocument, pageIndex: Int?): String = withContext(Dispatchers.Default) {
+        val pages = pageIndex?.let { listOf(it) } ?: (0 until document.pageCount).toList()
+        buildString {
+            pages.forEachIndexed { index, page ->
+                if (index > 0) append("\n\n")
+                append(ocrPage(document, page))
+            }
+        }
+    }
 
-    override suspend fun search(document: PdfDocument, query: String, caseSensitive: Boolean): List<PdfSearchMatch> = emptyList()
+    override suspend fun search(document: PdfDocument, query: String, caseSensitive: Boolean): List<PdfSearchMatch> {
+        val needle = query.trim()
+        if (needle.isEmpty()) return emptyList()
+        val matches = mutableListOf<PdfSearchMatch>()
+        for (page in 0 until document.pageCount) {
+            val text = ocrPage(document, page)
+            val haystack = if (caseSensitive) text else text.lowercase()
+            val target = if (caseSensitive) needle else needle.lowercase()
+            var start = haystack.indexOf(target)
+            while (start >= 0) {
+                val end = start + target.length
+                val snippetStart = (start - 48).coerceAtLeast(0)
+                val snippetEnd = (end + 72).coerceAtMost(text.length)
+                matches += PdfSearchMatch(page, start, end, text.substring(snippetStart, snippetEnd).replace(Regex("\\s+"), " ").trim())
+                start = haystack.indexOf(target, start + target.length)
+            }
+        }
+        return matches
+    }
+
+    private suspend fun ocrPage(document: PdfDocument, pageIndex: Int): String {
+        require(pageIndex in 0 until document.pageCount)
+        val key = "${document.id}:$pageIndex"
+        ocrCache[key]?.let { return it }
+        val rendered = render(document, pageIndex, PdfRenderRequest(targetWidthPx = 1800))
+        val bitmap = BitmapFactory.decodeByteArray(rendered.encodedImage, 0, rendered.encodedImage.size)
+            ?: return ""
+        val text = try {
+            val result = ocrRecognizer.process(InputImage.fromBitmap(bitmap, 0)).awaitResult()
+            result.text.trim()
+        } finally { bitmap.recycle() }
+        ocrCache[key] = text
+        return text
+    }
+
+    private suspend fun <T> com.google.android.gms.tasks.Task<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
+        addOnSuccessListener { value -> if (continuation.isActive) continuation.resume(value) }
+        addOnFailureListener { failure -> if (continuation.isActive) continuation.resumeWithException(failure) }
+        addOnCanceledListener { continuation.cancel() }
+    }
 
     override suspend fun outline(document: PdfDocument): List<PdfOutlineItem> = emptyList()
 

@@ -82,6 +82,9 @@ kotlin {
             implementation("androidx.activity:activity-compose:1.10.1")
             implementation("androidx.activity:activity-ktx:1.10.1")
             implementation("app.cash.sqldelight:android-driver:2.0.2")
+            // On-device OCR keeps scanned PDFs searchable without uploading
+            // document contents to a third-party service.
+            implementation("com.google.mlkit:text-recognition:16.0.1")
         }
         desktopTest.dependencies {
             implementation(libs.kotlin.test)
@@ -214,7 +217,7 @@ android {
         applicationId = "com.inkora"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = compileSdk
-        versionCode = 12
+        versionCode = 13
         versionName = rootProject.version.toString()
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseUrl.asJavaStringLiteral()}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${supabasePublishableKey.asJavaStringLiteral()}\"")

@@ -2,6 +2,7 @@ package com.inkora.cloud
 
 import com.inkora.domain.model.DocumentContent
 import com.inkora.domain.model.DocumentType
+import com.inkora.platform.platformUuid
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -31,7 +32,7 @@ internal object InkoraCloudDefaults {
 
 expect fun supabaseConfig(): SupabaseConfig
 
-data class CloudHttpResponse(val status: Int, val body: String)
+data class CloudHttpResponse(val status: Int, val body: String, val bytes: ByteArray? = null)
 
 interface CloudHttpClient {
     suspend fun execute(
@@ -104,6 +105,24 @@ class SupabaseClient(
         )
     }
 
+    private suspend fun rawRequest(
+        method: String,
+        path: String,
+        accessToken: String? = null,
+        body: ByteArray? = null,
+        contentType: String? = "application/json",
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): CloudHttpResponse {
+        requireConfigured()
+        val requestHeaders = buildMap {
+            put("apikey", config.publishableKey)
+            accessToken?.takeIf { it.isNotBlank() }?.let { put("Authorization", "Bearer $it") }
+            contentType?.let { put("Content-Type", it) }
+            putAll(extraHeaders)
+        }
+        return http.execute(method, endpoint(path), requestHeaders, body)
+    }
+
     suspend fun signIn(email: String, password: String): CloudAuthResult {
         require(email.contains('@')) { "Enter a valid email address." }
         require(password.length >= 6) { "Password must be at least 6 characters." }
@@ -159,13 +178,16 @@ class SupabaseClient(
     suspend fun upsertDocument(session: CloudSession, document: DocumentContent) {
         val summary = document.summary
         val payload = json.encodeToJsonElement(cloudSafeDocument(document))
+        val storagePath = (document as? DocumentContent.Pdf)?.let {
+            "${session.user?.id ?: error("Cloud session has no user id")}/${summary.id.value}.pdf"
+        }
         val body = buildJsonObject {
             put("id", summary.id.value)
             put("owner_id", session.user?.id ?: error("Cloud session has no user id"))
             put("title", summary.title)
             put("kind", summary.type.name)
             put("payload", payload)
-            put("source_file_path", summary.sourceFileName)
+            put("source_file_path", storagePath ?: summary.sourceFileName)
             put("version", 1)
         }
         val response = request(
@@ -178,11 +200,102 @@ class SupabaseClient(
         if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
     }
 
+    suspend fun uploadDocumentFile(session: CloudSession, document: DocumentContent.Pdf, bytes: ByteArray) {
+        val userId = session.user?.id ?: error("Cloud session has no user id")
+        val path = "/storage/v1/object/documents/${urlEncode(userId)}/${urlEncode(document.summary.id.value)}.pdf"
+        val response = rawRequest("POST", path, session.accessToken, bytes, "application/pdf", mapOf("x-upsert" to "true"))
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+    }
+
+    suspend fun downloadDocumentFile(session: CloudSession, storagePath: String): ByteArray {
+        val segments = storagePath.split('/').filter { it.isNotBlank() }
+        require(segments.size == 2) { "Invalid cloud document path" }
+        val path = "/storage/v1/object/documents/${urlEncode(segments[0])}/${urlEncode(segments[1])}"
+        val response = rawRequest("GET", path, session.accessToken, null, null)
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        return response.bytes ?: response.body.encodeToByteArray()
+    }
+
     suspend fun listDocuments(session: CloudSession): List<CloudDocumentRow> {
         val response = request(
             method = "GET",
-            path = "/rest/v1/documents?select=id,owner_id,title,kind,payload,version,deleted_at&order=updated_at.desc",
+            path = "/rest/v1/documents?select=id,owner_id,title,kind,payload,source_file_path,version,deleted_at&order=updated_at.desc",
             accessToken = session.accessToken,
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        return json.decodeFromString(response.body)
+    }
+
+    /** Creates a revocable, role-scoped share token. The raw token never goes
+     * to Supabase; only its PKCE-compatible SHA-256 digest is persisted. */
+    suspend fun createShareLink(session: CloudSession, documentId: String, role: String = "viewer", expiresAt: String? = null): CloudShareLink {
+        require(role in setOf("viewer", "commenter", "editor")) { "Unsupported share role" }
+        val token = "${platformUuid().replace("-", "")}${platformUuid().replace("-", "")}".take(96)
+        val response = request(
+            method = "POST",
+            path = "/rest/v1/share_links?select=id,document_id,role,expires_at,created_at",
+            accessToken = session.accessToken,
+            body = buildJsonObject {
+                put("document_id", documentId)
+                put("created_by", session.user?.id ?: error("Cloud session has no user id"))
+                put("token_hash", oauthCodeChallenge(token))
+                put("role", role)
+                expiresAt?.let { put("expires_at", it) }
+            },
+            extraHeaders = mapOf("Prefer" to "return=representation"),
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        val row = json.decodeFromString<List<CloudShareLinkRow>>(response.body).firstOrNull()
+            ?: error("Share link was not returned by the cloud")
+        return CloudShareLink(row.id, row.documentId, row.role, row.expiresAt, "inkora://share/$token")
+    }
+
+    suspend fun listShareLinks(session: CloudSession, documentId: String): List<CloudShareLinkRow> {
+        val response = request(
+            method = "GET",
+            path = "/rest/v1/share_links?select=id,document_id,role,expires_at,created_at&document_id=eq.${urlEncode(documentId)}&revoked_at=is.null&order=created_at.desc",
+            accessToken = session.accessToken,
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        return json.decodeFromString(response.body)
+    }
+
+    suspend fun revokeShareLink(session: CloudSession, linkId: String) {
+        val response = request(
+            method = "DELETE",
+            path = "/rest/v1/share_links?id=eq.${urlEncode(linkId)}",
+            accessToken = session.accessToken,
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+    }
+
+    /** Resolves a share token without requiring the recipient to sign in.
+     * The database function returns only the document snapshot and role that
+     * the token grants; the raw token is never sent as a query parameter. */
+    suspend fun resolveShareLink(rawToken: String): CloudSharedDocument {
+        require(rawToken.isNotBlank()) { "Share link is missing its token." }
+        val response = request(
+            method = "POST",
+            path = "/rest/v1/rpc/resolve_share_link",
+            body = buildJsonObject { put("raw_token", rawToken) },
+        )
+        if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
+        return json.decodeFromString<List<CloudSharedDocument>>(response.body).firstOrNull()
+            ?: throw CloudException(404, "This share link is invalid, expired, or revoked.")
+    }
+
+    suspend fun inviteMember(session: CloudSession, documentId: String, email: String, role: String = "viewer"): CloudMember {
+        require(email.contains('@')) { "Enter a valid collaborator email address." }
+        require(role in setOf("viewer", "commenter", "editor")) { "Unsupported collaborator role" }
+        val response = request(
+            method = "POST",
+            path = "/rest/v1/rpc/invite_document_member",
+            accessToken = session.accessToken,
+            body = buildJsonObject {
+                put("target_document_id", documentId)
+                put("invitee_email", email.trim())
+                put("member_role", role)
+            },
         )
         if (response.status !in 200..299) throw CloudException(response.status, parseError(response.body))
         return json.decodeFromString(response.body)
@@ -222,14 +335,49 @@ data class CloudDocumentRow(
     val title: String,
     val kind: String,
     val payload: kotlinx.serialization.json.JsonElement,
+    @SerialName("source_file_path") val sourceFilePath: String? = null,
     val version: Long = 1,
     @SerialName("deleted_at") val deletedAt: String? = null,
 )
 
+@Serializable
+data class CloudShareLinkRow(
+    val id: String,
+    @SerialName("document_id") val documentId: String,
+    val role: String = "viewer",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+data class CloudShareLink(
+    val id: String,
+    val documentId: String,
+    val role: String,
+    val expiresAt: String?,
+    val url: String,
+)
+
+@Serializable
+data class CloudSharedDocument(
+    @SerialName("document_id") val documentId: String,
+    val title: String,
+    val kind: String,
+    val payload: kotlinx.serialization.json.JsonElement,
+    val role: String,
+)
+
+@Serializable
+data class CloudMember(
+    @SerialName("document_id") val documentId: String,
+    @SerialName("user_id") val userId: String,
+    val role: String = "viewer",
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
 class CloudException(val status: Int, override val message: String) : Exception(message)
 
-/** Avoid leaking machine-specific paths into cloud snapshots. The original
- * files remain local until storage upload is added in the next sync phase. */
+/** Avoid leaking machine-specific paths into cloud snapshots. PDF bytes are
+ * uploaded separately to the private storage bucket during sync. */
 private fun cloudSafeDocument(document: DocumentContent): DocumentContent = when (document) {
     is DocumentContent.Pdf -> document.copy(managedFilePath = "")
     is DocumentContent.TextDocument -> document.copy(sourceFilePath = null)

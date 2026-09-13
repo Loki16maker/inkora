@@ -25,4 +25,15 @@ class RepositoryTest {
         repository.restoreFromTrash(id)
         assertEquals(id, repository.observeDocuments().first().single().id)
     }
+
+    @Test
+    fun searchIncludesStoredDocumentText() = runTest {
+        val repository = InMemoryDocumentRepository()
+        val id = DocumentId("notes-1")
+        val summary = DocumentSummary(id, DocumentType.TEXT_DOCUMENT, "Lecture notes", 1L, 2L)
+        repository.saveDocument(DocumentContent.TextDocument(summary, "Renal physiology and filtration"))
+
+        assertEquals(listOf(id), repository.searchTitles("FILTRATION").map { it.id })
+        assertTrue(repository.searchTitles("missing").isEmpty())
+    }
 }

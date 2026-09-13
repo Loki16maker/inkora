@@ -34,7 +34,8 @@ private class AndroidCloudHttpClient : CloudHttpClient {
             }
             val status = connection.responseCode
             val stream = if (status in 200..399) connection.inputStream else connection.errorStream
-            CloudHttpResponse(status, stream?.use { it.readBytes().decodeToString() }.orEmpty())
+            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
+            CloudHttpResponse(status, bytes.decodeToString(), bytes)
         } finally {
             connection.disconnect()
         }

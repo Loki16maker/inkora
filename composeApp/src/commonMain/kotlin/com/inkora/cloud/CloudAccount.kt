@@ -1,9 +1,11 @@
 package com.inkora.cloud
 
 import com.inkora.domain.model.DocumentContent
+import com.inkora.domain.model.DocumentId
 import com.inkora.domain.model.SyncStatus
 import com.inkora.domain.repository.DocumentRepository
 import com.inkora.platform.platformUuid
+import com.inkora.platform.PlatformFile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,30 +72,68 @@ class CloudAccount(
         val local = repository.observeDocuments(includeTrashed = true).first().mapNotNull { repository.getDocument(it.id) }
         var uploaded = 0
         local.forEach { document ->
+            if (document is DocumentContent.Pdf && document.managedFilePath.isNotBlank()) {
+                val source = PlatformFile(document.managedFilePath, document.summary.sourceFileName ?: "document.pdf", "application/pdf")
+                if (files.exists(source)) client.uploadDocumentFile(current, document, files.read(source))
+            }
             client.upsertDocument(current, document)
             repository.saveDocument(document.withSyncStatus(SyncStatus.SYNCED))
             uploaded++
         }
 
-        val localIds = local.mapTo(mutableSetOf()) { it.summary.id.value }
         var downloaded = 0
         var skipped = 0
         client.listDocuments(current).forEach { row ->
-            if (row.id in localIds) {
-                skipped++
-                return@forEach
-            }
-            if (row.kind == "PDF") {
-                // A PDF's source bytes are uploaded in the storage phase. Do not
-                // create a broken local PDF that has no managed file path.
-                skipped++
-                return@forEach
-            }
             runCatching { json.decodeFromJsonElement<DocumentContent>(row.payload) }
-                .onSuccess { repository.saveDocument(it.withSyncStatus(SyncStatus.SYNCED)); downloaded++ }
+                .onSuccess { remote ->
+                    val localDocument = repository.getDocument(DocumentId(row.id))
+                    if (localDocument != null && remote.summary.modifiedAtEpochMs <= localDocument.summary.modifiedAtEpochMs) {
+                        skipped++
+                        return@onSuccess
+                    }
+                    if (remote is DocumentContent.Pdf) {
+                        val storagePath = row.sourceFilePath
+                        if (storagePath.isNullOrBlank()) { skipped++; return@onSuccess }
+                        runCatching {
+                            val bytes = client.downloadDocumentFile(current, storagePath)
+                            val folder = files.createDirectory(files.child(files.appDataDirectory, "documents"))
+                            val managed = files.child(folder, "cloud-${row.id}.pdf")
+                            files.write(managed, bytes)
+                            repository.saveDocument(remote.copy(managedFilePath = managed.path).withSyncStatus(SyncStatus.SYNCED))
+                            downloaded++
+                        }.onFailure { skipped++ }
+                    } else {
+                        repository.saveDocument(remote.withSyncStatus(SyncStatus.SYNCED))
+                        downloaded++
+                    }
+                }
                 .onFailure { skipped++ }
         }
         CloudSyncSummary(uploaded, downloaded, skipped)
+    }
+
+    suspend fun createShareLink(documentId: String, role: String = "viewer"): CloudShareLink = runBusy {
+        val current = _session.value ?: error("Sign in to create a share link.")
+        client.createShareLink(current, documentId, role)
+    }
+
+    suspend fun listShareLinks(documentId: String): List<CloudShareLinkRow> = runBusy {
+        val current = _session.value ?: error("Sign in to manage share links.")
+        client.listShareLinks(current, documentId)
+    }
+
+    suspend fun revokeShareLink(linkId: String) = runBusy {
+        val current = _session.value ?: error("Sign in to manage share links.")
+        client.revokeShareLink(current, linkId)
+    }
+
+    suspend fun resolveShareLink(rawToken: String): CloudSharedDocument = runBusy {
+        client.resolveShareLink(rawToken)
+    }
+
+    suspend fun inviteMember(documentId: String, email: String, role: String = "viewer"): CloudMember = runBusy {
+        val current = _session.value ?: error("Sign in to invite a collaborator.")
+        client.inviteMember(current, documentId, email, role)
     }
 
     private suspend fun persist(value: CloudSession) {
